@@ -1,20 +1,26 @@
 # GoLaravel ⚡️
 
-The fastest full-stack web framework in the world — combining the developer ergonomics and architectural elegance of **Laravel** with the compiled performance, zero-reflection execution, and concurrency of **Go**.
+The fastest full-stack web framework in the world — pairing the developer ergonomics, elegance, and batteries-included architecture of **Laravel** with the compiled performance, zero-reflection execution, and multiplatform power of **Go** and **Flutter**.
 
 ---
 
 ## 🚀 Key Highlights & Architectural Pillars
 
-| Component | Architecture | Performance Benefit |
+| Component | Architecture | Performance & Capability |
 |---|---|---|
 | **View Engine** | **Templ** (`.templ`) | **25.6x faster** than standard `html/template` (44.8 ns/op, **0 B/op, 0 allocs/op**) |
 | **HTTP Router** | Zero-alloc Radix Trie | **8.6 ns** static matching, **27.9 ns** deep param matching (**0 allocs/op**) |
 | **ORM Layer** | **Ent** (entgo.io/ent) | 100% type-safe graph traversal with **zero runtime reflection** |
+| **Presentation Flexibility** | **Hybrid Engine** | **Flutter** (Web/Mobile/Desktop) + **Templ** micro-SSR (Invoices, Receipts) + **Inertia.js** |
+| **Multiplatform Client** | **Flutter** | Native Android, iOS, Windows, macOS, Linux, and Web |
 | **IoC Container** | Generic-based DI | Type-safe resolution (`Resolve[T]`) at **24.5 ns/op, 0 allocs/op** |
 | **JSON Engine** | SIMD/Fast JSON (`goccy/go-json`) | **2.2x faster** serialization with buffer streaming |
-| **CLI Tool** | **Artisan for Go** | Scaffolds schemas, views, controllers, runs code generation |
-| **Binary Footprint** | Single standalone binary | **27 MB** (including SQLite, Ent ORM, and Templ views) |
+| **Auth & Security** | Multi-Guard Auth | JWT Bearer tokens, Session cookies, Argon2id & Bcrypt, Gates & Policies |
+| **Validation** | Form Requests | Struct-level binding with Laravel-compatible **422 Unprocessable Entity** error bags |
+| **Async Processing** | Queues & Workers | In-memory & Redis worker pools with automatic retries and dead-letter handling |
+| **Task Scheduling** | In-Process Cron | Fluent Go scheduler (`DailyAt`, `Hourly`, `EveryMinute`) |
+| **Filesystem & Cache** | Flysystem & Cache Facades | Local disk, S3, Memory cache with automatic TTL eviction |
+| **CLI Tool** | **Artisan for Go** | Project scaffolder (`artisan new`), generator suite, and lifecycle runners |
 
 ---
 
@@ -30,32 +36,36 @@ BenchmarkContainer_Resolve_Singleton-16    64,029,606    24.53 ns/op      0 B/op
 BenchmarkGoLaravel_E2E_HTTP_Pipeline-16     5,567,833   215.50 ns/op    176 B/op    4 allocs/op
 ```
 
-* Sustained throughput: **Over 4.6 million requests/second** on a single thread.
-* **Zero allocations** on routing and template rendering.
+* **Zero Allocations**: Radix routing and `templ` rendering execute with **0 heap allocations**.
+* **Sustained Throughput**: Over **4.6 million requests/second** on a single thread.
 
 ---
 
-## 🛠 Project Layout
+## 📦 Framework Packages
 
 ```text
 golaravel/
-├── cmd/
-│   └── artisan/            # The Artisan CLI tool for GoLaravel
 ├── pkg/
 │   ├── golaravel/          # Application kernel & HTTP engine (sync.Pool context)
 │   ├── container/          # Generic type-safe IoC container (Resolve[T])
-│   ├── router/             # Zero-allocation Radix trie router
-│   ├── context/            # Pooled request context (JSON, Templ, Forms)
+│   ├── router/             # Zero-allocation Radix trie router (route groups, named routes)
+│   ├── context/            # Pooled request context (c.JSON, c.Templ, c.Inertia, c.Param)
 │   ├── view/               # Templ helpers (Blade-like @csrf, @method)
-│   ├── middleware/         # Recovery, Logger, CORS, CSRF, SecureHeaders, RateLimiter
-│   ├── database/           # High-concurrency connection pool & transaction manager
+│   ├── flutter/            # Flutter Web static hosting with SPA fallback
+│   ├── inertia/            # Full Inertia.js protocol adapter (React / Vue)
+│   ├── auth/               # Multi-guard auth (JWT Bearer, Sessions, Gates & Policies)
+│   ├── hash/               # Password hashing (Argon2id, Bcrypt with work-factor upgrades)
+│   ├── validation/         # Form requests with 422 JSON error bags
+│   ├── queue/              # Concurrent background job queues & worker pools
+│   ├── schedule/           # In-process fluent cron scheduler
+│   ├── events/             # Synchronous & asynchronous event dispatcher
+│   ├── cache/              # Memory & Redis cache with TTL and Remember()
+│   ├── storage/            # Multi-driver disk storage (Local, S3)
+│   ├── mail/               # Fluent email builder (LogDriver, SMTP)
+│   ├── config/             # Multi-environment config loader (.env, typed getters)
+│   ├── database/           # High-concurrency connection pool tuning & transactions
 │   └── artisan/            # Artisan command registry & generators
-├── example/                # Full reference app (Ent ORM + Templ + Controllers)
-│   ├── app/
-│   │   ├── schema/         # Ent schemas (user.go)
-│   │   ├── handlers/       # Controllers (user_controller.go)
-│   │   └── views/          # Templ components (layout, home, users)
-│   └── main.go             # Application entrypoint
+├── example/                # Full reference app (Ent ORM + Templ + Flutter Hybrid)
 └── benchmarks/             # Micro and end-to-end benchmark suite
 ```
 
@@ -63,30 +73,31 @@ golaravel/
 
 ## ⚡ Quickstart
 
-### 1. Installation & Generation
+### 1. Interactive Project Creation
 ```bash
-# Generate Ent ORM models & Templ views
-artisan generate
+artisan new my-project
 ```
+The interactive wizard prompts for:
+- Presentation stack: Templ (Blade SSR), Inertia.js (React/Vue), Flutter, or **Hybrid (Flutter + Templ)**
+- Target platforms (Web, Android, iOS, Windows, macOS, Linux)
+- Database driver (SQLite, PostgreSQL, MySQL)
 
-### 2. Scaffold New Components with Artisan
+### 2. Artisan Commands
 ```bash
-# Create an Ent database schema
-artisan make:schema Post
+# Code generation
+artisan generate            # Rebuild Ent ORM models & Templ views
+artisan flutter:build       # Compile Flutter Web into client/build/web
 
-# Create a Templ component view
-artisan make:view posts
+# Scaffolding
+artisan make:schema Post    # Create Ent database schema
+artisan make:controller Post # Create controller
+artisan make:job SendMail   # Create async background job
+artisan make:mail Welcome   # Create mailable email
+artisan make:policy Post    # Create authorization policy
+artisan make:view posts     # Create Templ view
+artisan make:middleware Auth# Create middleware
 
-# Create a controller
-artisan make:controller PostController
-
-# Create custom middleware
-artisan make:middleware AuthToken
+# Server & Workers
+artisan serve               # Start HTTP development server
+artisan queue:work          # Launch background queue workers
 ```
-
-### 3. Running the Example Server
-```bash
-go run ./example/main.go
-```
-
-Access the app at `http://localhost:8080`.

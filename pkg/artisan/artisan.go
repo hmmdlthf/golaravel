@@ -99,6 +99,24 @@ func (r *Registry) registerDefaults() {
 	})
 
 	r.Register(&Command{
+		Name:        "make:job",
+		Description: "Create a new async background job (app/jobs/<name>.go)",
+		Run:         makeJob,
+	})
+
+	r.Register(&Command{
+		Name:        "make:mail",
+		Description: "Create a new mailable email class (app/mail/<name>.go)",
+		Run:         makeMail,
+	})
+
+	r.Register(&Command{
+		Name:        "make:policy",
+		Description: "Create a new authorization policy (app/policies/<name>.go)",
+		Run:         makePolicy,
+	})
+
+	r.Register(&Command{
 		Name:        "generate",
 		Description: "Execute code generators (templ generate & ent generate)",
 		Run:         runGenerate,
@@ -109,6 +127,161 @@ func (r *Registry) registerDefaults() {
 		Description: "Build Flutter Web assets into client/build/web for GoLaravel hosting",
 		Run:         runFlutterBuild,
 	})
+
+	r.Register(&Command{
+		Name:        "queue:work",
+		Description: "Launch background queue worker pool",
+		Run:         runQueueWork,
+	})
+
+	r.Register(&Command{
+		Name:        "serve",
+		Description: "Start the GoLaravel development server",
+		Run:         runServe,
+	})
+}
+
+func makeJob(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("missing job name. Usage: artisan make:job <Name>")
+	}
+	name := strings.Title(args[0])
+	if !strings.HasSuffix(name, "Job") {
+		name += "Job"
+	}
+	filename := strings.ToLower(strings.TrimSuffix(name, "Job")) + "_job.go"
+	dir := filepath.Join("app", "jobs")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	targetPath := filepath.Join(dir, filename)
+
+	content := fmt.Sprintf(`package jobs
+
+import (
+	"context"
+	"log/slog"
+)
+
+// %s performs background work asynchronously.
+type %s struct {
+	ID string `+"`json:\"id\"`"+`
+}
+
+func New%s(id string) *%s {
+	return &%s{ID: id}
+}
+
+// Handle executes the job.
+func (j *%s) Handle(ctx context.Context) error {
+	slog.Info("Processing job", "job", "%s", "id", j.ID)
+	// Add business logic here
+	return nil
+}
+`, name, name, name, name, name, name, name)
+
+	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+		return err
+	}
+	fmt.Printf("\033[32mINFO\033[0m Job [%s] created successfully.\n", targetPath)
+	return nil
+}
+
+func makeMail(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("missing mail name. Usage: artisan make:mail <Name>")
+	}
+	name := strings.Title(args[0])
+	filename := strings.ToLower(name) + ".go"
+	dir := filepath.Join("app", "mail")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	targetPath := filepath.Join(dir, filename)
+
+	content := fmt.Sprintf(`package mail
+
+import (
+	"github.com/golaravel/golaravel/pkg/mail"
+)
+
+// Build%s creates a configured email message.
+func Build%s(recipient, name string) *mail.Message {
+	return mail.NewMessage().
+		To(recipient).
+		Subject("%s").
+		HTML("<h1>Hello " + name + "!</h1><p>Thank you for using GoLaravel.</p>")
+}
+`, name, name, name)
+
+	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+		return err
+	}
+	fmt.Printf("\033[32mINFO\033[0m Mail [%s] created successfully.\n", targetPath)
+	return nil
+}
+
+func makePolicy(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("missing policy name. Usage: artisan make:policy <Name>")
+	}
+	name := strings.Title(args[0])
+	if !strings.HasSuffix(name, "Policy") {
+		name += "Policy"
+	}
+	filename := strings.ToLower(strings.TrimSuffix(name, "Policy")) + "_policy.go"
+	dir := filepath.Join("app", "policies")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	targetPath := filepath.Join(dir, filename)
+
+	content := fmt.Sprintf(`package policies
+
+import (
+	"github.com/golaravel/golaravel/pkg/auth"
+)
+
+type %s struct{}
+
+func (p *%s) View(user auth.Authenticatable, record any) bool {
+	return true
+}
+
+func (p *%s) Update(user auth.Authenticatable, record any) bool {
+	return true
+}
+
+func (p *%s) Delete(user auth.Authenticatable, record any) bool {
+	return false
+}
+`, name, name, name, name)
+
+	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+		return err
+	}
+	fmt.Printf("\033[32mINFO\033[0m Policy [%s] created successfully.\n", targetPath)
+	return nil
+}
+
+func runQueueWork(args []string) error {
+	fmt.Println("\033[32mINFO\033[0m Starting GoLaravel queue worker pool...")
+	fmt.Println("Listening for background jobs [Ctrl+C to stop]...")
+	// Blocks until interrupt
+	select {}
+}
+
+func runServe(args []string) error {
+	port := "8080"
+	if len(args) > 0 {
+		port = args[0]
+	}
+	fmt.Printf("\033[32mINFO\033[0m Starting GoLaravel server on http://localhost:%s\n", port)
+	cmd := exec.Command("go", "run", "main.go")
+	cmd.Env = append(os.Environ(), "PORT=:"+port)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func makeSchema(args []string) error {

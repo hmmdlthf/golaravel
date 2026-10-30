@@ -7,6 +7,7 @@ require (
 	github.com/a-h/templ v0.3.1100
 	github.com/goccy/go-json v0.12.0
 	github.com/mattn/go-sqlite3 v1.14.52
+	golang.org/x/crypto v0.58.0
 )
 
 require (
@@ -23,5 +24,6 @@ require (
 	github.com/zclconf/go-cty v1.14.4 // indirect
 	github.com/zclconf/go-cty-yaml v1.1.0 // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 )
