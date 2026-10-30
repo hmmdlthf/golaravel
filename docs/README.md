@@ -1,0 +1,68 @@
+# GoLaravel Documentation 📖
+
+Welcome to the official documentation for **GoLaravel** — the ultra-high-performance full-stack web framework that combines Laravel's developer ergonomics and architectural elegance with Go's compiled speed, zero-reflection execution, and multiplatform power.
+
+---
+
+## 📚 Table of Contents
+
+1. **[Getting Started & Installation](./installation.md)**
+   - System Prerequisites (Go, Templ, Flutter)
+   - Installing the Artisan CLI
+   - Creating Your First Project (`artisan new`)
+   - Directory Structure Overview
+
+2. **[Routing & Controllers](./routing-and-controllers.md)**
+   - Zero-Allocation Radix Router
+   - Route Groups & Prefixes
+   - Route Parameters (`:id` and `{id}`)
+   - Context Pooling (`sync.Pool`)
+   - Middleware Pipeline
+
+3. **[Database & Ent ORM](./database-and-ent.md)**
+   - Declarative Schema-as-Code (`app/schema/`)
+   - Running `artisan generate`
+   - Type-Safe Graph Edge Traversal (`WithItems()`)
+   - Atomic Transactions (`WithTx` / `client.Tx`)
+   - High-Concurrency Connection Pooling
+
+4. **[Templating with Templ (Blade Equivalent)](./templ-views.md)**
+   - Why Templ Replaces Traditional Blade
+   - Layout Components & Children
+   - Blade-like Helpers (`@csrf`, `@method`)
+   - Zero-Reflection Direct Stream Rendering
+
+5. **[Flutter Multiplatform & Hybrid Serving](./flutter-multiplatform.md)**
+   - Multiplatform Support (Web, Windows, macOS, Linux, iOS, Android)
+   - Serving Flutter Web from GoLaravel (`flutter.ServeWeb`)
+   - **The Hybrid Micro-SSR Pattern**: Instant zero-JS public invoice/receipt pages vs Flutter SPA
+
+6. **[Inertia.js Protocol Adapter](./inertia.md)**
+   - Modern Monoliths without REST/GraphQL boilerplate
+   - `c.Inertia("Component", props)`
+   - Asset Versioning & Conflict Resolution
+
+7. **[Validation & Form Requests](./validation-and-form-requests.md)**
+   - FormRequest Interface
+   - Validation Rules (`Required`, `Email`, `MinLength`, etc.)
+   - Laravel-Compatible **422 Unprocessable Entity** Error Bags
+
+8. **[Authentication & Security](./authentication-and-security.md)**
+   - JWT Bearer Tokens for Flutter & APIs
+   - Password Hashing (Argon2id & Bcrypt)
+   - Authorization Gates & Policies
+   - Built-in Middlewares (CSRF, CORS, RateLimiter, SecureHeaders)
+
+9. **[Queues & Task Scheduling](./queues-and-scheduling.md)**
+   - Async Background Jobs (`queue.Push`)
+   - Scalable Worker Pools (`artisan queue:work`)
+   - In-Process Fluent Cron Scheduler (`schedule.DailyAt`, `Hourly`)
+
+10. **[Artisan CLI Reference](./artisan-cli.md)**
+    - Project Creation (`artisan new`)
+    - Generator Commands (`make:schema`, `make:controller`, `make:job`, etc.)
+    - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`)
+
+11. **[Performance & Benchmarks](./benchmarks.md)**
+    - Zero-Allocation Architecture Methodology
+    - Micro-benchmark Results vs Gin, Fiber, and Laravel Octane

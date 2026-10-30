@@ -82,7 +82,27 @@ The interactive wizard prompts for:
 - Target platforms (Web, Android, iOS, Windows, macOS, Linux)
 - Database driver (SQLite, PostgreSQL, MySQL)
 
-### 2. Artisan Commands
+---
+
+## 📖 Comprehensive Documentation
+
+Explore the in-depth documentation guides in [`docs/`](./docs/):
+
+- 🚀 **[Getting Started & Installation](./docs/installation.md)**
+- ⚡ **[Routing & Controllers](./docs/routing-and-controllers.md)**
+- 🗄️ **[Database & Ent ORM](./docs/database-and-ent.md)**
+- 🎨 **[Templating with Templ (Blade Equivalent)](./docs/templ-views.md)**
+- 📱 **[Flutter Multiplatform & Hybrid Serving](./docs/flutter-multiplatform.md)**
+- ⚛️ **[Inertia.js Protocol Adapter](./docs/inertia.md)**
+- 🛡️ **[Validation & Form Requests](./docs/validation-and-form-requests.md)**
+- 🔒 **[Authentication & Security](./docs/authentication-and-security.md)**
+- ⏱️ **[Queues & Task Scheduling](./docs/queues-and-scheduling.md)**
+- 🛠️ **[Artisan CLI Reference](./docs/artisan-cli.md)**
+- 📊 **[Performance Benchmarks](./docs/benchmarks.md)**
+
+---
+
+## 🛠 Artisan Commands
 ```bash
 # Code generation
 artisan generate            # Rebuild Ent ORM models & Templ views
