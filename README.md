@@ -59,8 +59,8 @@ golaravel/
 │   ├── queue/              # Concurrent background job queues & worker pools
 │   ├── schedule/           # In-process fluent cron scheduler
 │   ├── events/             # Synchronous & asynchronous event dispatcher
-│   ├── cache/              # Memory & Redis cache with TTL and Remember()
-│   ├── storage/            # Multi-driver disk storage (Local, S3)
+│   ├── cache/              # Tagged cache engine, atomic locks, Memory & Redis with TTL
+│   ├── storage/            # Multi-disk cloud filesystem (S3, MinIO, Local, SigV4 Presigned URLs)
 │   ├── mail/               # Fluent email builder (LogDriver, SMTP)
 │   ├── broadcast/          # Realtime WebSockets & SSE broadcasting with Ent hooks
 │   ├── notification/       # Multi-channel notifications (Mail, DB, Broadcast, Slack, SMS)

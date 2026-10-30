@@ -4,8 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/a-h/templ"
@@ -306,6 +309,44 @@ func MustGetModel[T any](c *Context, name string) T {
 		panic(fmt.Sprintf("context: model [%s] not found in request context", name))
 	}
 	return m
+}
+
+// FormValue returns the form value for the provided key.
+func (c *Context) FormValue(name string) string {
+	return c.Request.FormValue(name)
+}
+
+// FormFile returns the first file for the provided form key.
+func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
+	if c.Request.MultipartForm == nil {
+		if err := c.Request.ParseMultipartForm(32 << 20); err != nil {
+			return nil, err
+		}
+	}
+	_, fh, err := c.Request.FormFile(name)
+	return fh, err
+}
+
+// SaveUploadedFile uploads the form file to specific dst.
+func (c *Context) SaveUploadedFile(file *multipart.FileHeader, dst string) error {
+	src, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, src)
+	return err
 }
 
 // BindJSON deserializes the JSON request body into the provided struct pointer

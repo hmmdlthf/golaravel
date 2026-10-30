@@ -92,12 +92,18 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
     - Distributed & In-Process Atomic Locks (`Cache.Lock(...)`)
     - Automatic Lock Expiration & Auto-Release (`Lock.Get`, `Lock.Block`)
 
-15. **[Artisan CLI Reference](./artisan-cli.md)**
+15. **[Cloud Filesystem & Presigned URLs (PRD §7)](./cloud-storage-and-s3.md)**
+    - Multi-Disk Registry (`local`, `public`, `s3`, `minio`)
+    - Zero-External-SDK AWS Signature Version 4 (SigV4) Engine
+    - Time-Limited Presigned URLs (`TemporaryURL`, `PresignedPutURL`)
+    - Direct Client Uploads & Multipart Form Helpers (`c.FormFile`, `c.SaveUploadedFile`)
+
+16. **[Artisan CLI Reference](./artisan-cli.md)**
     - Project Creation (`artisan new`)
     - Database Migrations & Seeding (`migrate`, `migrate:diff`, `db:seed`, etc.)
     - Generator Commands (`make:schema`, `make:controller`, `make:job`, `make:notification`, `make:scope`, etc.)
     - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`)
 
-16. **[Performance & Benchmarks](./benchmarks.md)**
+17. **[Performance & Benchmarks](./benchmarks.md)**
     - Zero-Allocation Architecture Methodology
     - Micro-benchmark Results vs Gin, Fiber, and Laravel Octane

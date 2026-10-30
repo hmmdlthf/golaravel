@@ -2,6 +2,8 @@ package golaravel
 
 import (
 	stdContext "context"
+	"io"
+	"mime/multipart"
 	"time"
 
 	"github.com/golaravel/golaravel/pkg/auth"
@@ -38,6 +40,7 @@ type (
 	SoftDeleteMixin = privacy.SoftDeleteMixin
 	TenantMixin     = privacy.TenantMixin
 	SessionState    = session.Session
+	StorageDriver   = storage.Driver
 )
 
 // New initializes a bare GoLaravel application.
@@ -143,17 +146,45 @@ var (
 		DispatchAsync: events.DispatchAsync,
 	}
 
-	// Storage provides access to the filesystem
+	// Storage provides access to the multi-disk cloud filesystem
 	Storage = struct {
-		Put    func(path string, contents []byte) error
-		Get    func(path string) ([]byte, error)
-		Exists func(path string) bool
-		Delete func(path string) error
+		Disk             func(name ...string) storage.Driver
+		RegisterDisk     func(name string, d storage.Driver)
+		SetDefaultDisk   func(name string)
+		Put              func(path string, contents []byte) error
+		PutReader        func(path string, r io.Reader) error
+		Get              func(path string) ([]byte, error)
+		GetStream        func(path string) (io.ReadCloser, error)
+		Exists           func(path string) bool
+		Delete           func(path string) error
+		Copy             func(src, dst string) error
+		Move             func(src, dst string) error
+		Size             func(path string) (int64, error)
+		LastModified     func(path string) (time.Time, error)
+		MimeType         func(path string) (string, error)
+		URL              func(path string) string
+		TemporaryURL     func(path string, ttl time.Duration) (string, error)
+		PresignedPutURL  func(path string, ttl time.Duration) (string, error)
+		SaveUploadedFile func(file *multipart.FileHeader, dstPath string, disk ...string) error
 	}{
-		Put:    storage.Put,
-		Get:    storage.Get,
-		Exists: storage.Exists,
-		Delete: storage.Delete,
+		Disk:             storage.Disk,
+		RegisterDisk:     storage.RegisterDisk,
+		SetDefaultDisk:   storage.SetDefaultDisk,
+		Put:              storage.Put,
+		PutReader:        storage.PutReader,
+		Get:              storage.Get,
+		GetStream:        storage.GetStream,
+		Exists:           storage.Exists,
+		Delete:           storage.Delete,
+		Copy:             storage.Copy,
+		Move:             storage.Move,
+		Size:             storage.Size,
+		LastModified:     storage.LastModified,
+		MimeType:         storage.MimeType,
+		URL:              storage.URL,
+		TemporaryURL:     storage.TemporaryURL,
+		PresignedPutURL:  storage.PresignedPutURL,
+		SaveUploadedFile: storage.SaveUploadedFile,
 	}
 
 	// Mail provides access to email sending
