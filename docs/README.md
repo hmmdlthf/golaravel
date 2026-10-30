@@ -65,13 +65,20 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
    - Authorization Gates & Policies
    - Built-in Middlewares (CSRF, CORS, RateLimiter, SecureHeaders)
 
-10. **[Stateful Sessions & Flash Messages (PRD §3.3)](./stateful-sessions-and-flash.md)**
+10. **[Socialite & OAuth2 Multi-Provider Authentication (PRD §4.2)](./socialite-oauth.md)**
+    - Multi-Provider Drivers (GitHub, Google, Discord, Generic OAuth2/OIDC)
+    - Normalized User Profile Interface (`oauth.User` implements `auth.Authenticatable`)
+    - Anti-CSRF State Validation (Encrypted Session or Secure Cookie)
+    - Mobile & SPA PKCE (RFC 7636) and Stateless Mode for Flutter Clients
+    - Route Mounting Helper (`Socialite.Mount`) & Generator (`artisan make:oauth <Provider>`)
+
+11. **[Stateful Sessions & Flash Messages (PRD §3.3)](./stateful-sessions-and-flash.md)**
     - AES-256-GCM Encrypted Cookie Sessions
     - Storage Drivers (Cookie, Memory, File)
     - One-Request Flash Messages (`session.Flash`)
     - Session-Backed CSRF Verification (`VerifyCSRFToken`)
 
-11. **[Redis Queue Driver, Priority Workers & Horizon Dashboard (PRD §6)](./queues-and-worker-dashboard.md)**
+12. **[Redis Queue Driver, Priority Workers & Horizon Dashboard (PRD §6)](./queues-and-worker-dashboard.md)**
     - Pluggable Drivers (`MemoryDriver`, `RedisDriver` with pure Go RESP client)
     - Multi-Queue Priority Polling (`high` -> `default` -> `low`)
     - Job Extensions: `Queueable`, `Delayable`, `Retryable`, `Timeoutable`

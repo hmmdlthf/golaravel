@@ -140,6 +140,12 @@ func (r *Registry) registerDefaults() {
 	})
 
 	r.Register(&Command{
+		Name:        "make:oauth",
+		Description: "Scaffold an OAuth2 social authentication controller (Usage: artisan make:oauth <Provider>)",
+		Run:         makeOAuth,
+	})
+
+	r.Register(&Command{
 		Name:        "make:scope",
 		Description: "Create a global Ent query scope (app/scopes/<name>_scope.go)",
 		Run:         makeScope,
@@ -480,6 +486,94 @@ func RegisterAuthWorkflows(c *container.Container, r router.RouteRegistrar, secr
 		return err
 	}
 	fmt.Printf("\033[32mINFO\033[0m Turnkey Auth & TOTP 2FA scaffolding [%s] created successfully.\n", targetPath)
+	return nil
+}
+
+func makeOAuth(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("missing provider name. Usage: artisan make:oauth <Provider> (e.g. GitHub, Google, Discord)")
+	}
+
+	raw := args[0]
+	name := strings.ToUpper(raw[:1]) + raw[1:]
+	slug := strings.ToLower(raw)
+
+	dir := filepath.Join("app", "handlers")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	targetPath := filepath.Join(dir, fmt.Sprintf("%s_oauth_controller.go", slug))
+	if _, err := os.Stat(targetPath); err == nil {
+		return fmt.Errorf("OAuth controller already exists at %s", targetPath)
+	}
+
+	tmpl := `package handlers
+
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/golaravel/golaravel/pkg/auth/oauth"
+	"github.com/golaravel/golaravel/pkg/context"
+	"github.com/golaravel/golaravel/pkg/router"
+)
+
+// {{NAME}}OAuthController handles OAuth2 authentication for {{NAME}}.
+type {{NAME}}OAuthController struct {
+	// Add your Ent database client or dependencies here
+}
+
+// New{{NAME}}OAuthController creates a new {{NAME}}OAuthController instance.
+func New{{NAME}}OAuthController() *{{NAME}}OAuthController {
+	return &{{NAME}}OAuthController{}
+}
+
+// RegisterRoutes registers the redirect and callback endpoints.
+func (ctrl *{{NAME}}OAuthController) RegisterRoutes(r router.RouteRegistrar) {
+	r.Get("/auth/{{SLUG}}/redirect", ctrl.Redirect)
+	r.Get("/auth/{{SLUG}}/callback", ctrl.Callback)
+}
+
+// Redirect initiates the OAuth2 redirect to {{NAME}}.
+func (ctrl *{{NAME}}OAuthController) Redirect(c *context.Context) error {
+	return oauth.Driver("{{SLUG}}").Redirect(c)
+}
+
+// Callback handles the provider callback, synchronizes user in database, and issues session/token.
+func (ctrl *{{NAME}}OAuthController) Callback(c *context.Context) error {
+	socialUser, err := oauth.Driver("{{SLUG}}").User(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{
+			"error":   "oauth_error",
+			"message": err.Error(),
+		})
+	}
+
+	// TODO: Find or create user in Ent database:
+	// user, err := db.User.Query().Where(user.Email(socialUser.Email)).Only(c.Request.Context())
+	// if ent.IsNotFound(err) {
+	//     user, err = db.User.Create().
+	//         SetEmail(socialUser.Email).
+	//         SetName(socialUser.Name).
+	//         SetAvatar(socialUser.Avatar).
+	//         Save(c.Request.Context())
+	// }
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"message": fmt.Sprintf("Authenticated via %s successfully", "{{NAME}}"),
+		"user":    socialUser,
+	})
+}
+`
+	content := strings.ReplaceAll(tmpl, "{{NAME}}", name)
+	content = strings.ReplaceAll(content, "{{SLUG}}", slug)
+
+	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+		return err
+	}
+
+	fmt.Printf("\033[32mINFO\033[0m OAuth Controller [%s] created successfully.\n", targetPath)
 	return nil
 }
 

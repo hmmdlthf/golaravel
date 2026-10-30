@@ -104,6 +104,7 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - ⚛️ **[Inertia.js Protocol Adapter](./docs/inertia.md)**
 - 🛡️ **[Validation & Form Requests](./docs/validation-and-form-requests.md)**
 - 🔒 **[Authentication & Security](./docs/authentication-and-security.md)**
+- 🔑 **[Socialite & OAuth2 Multi-Provider Authentication](./docs/socialite-oauth.md)**
 - 🍪 **[Stateful Sessions & Flash Messages](./docs/stateful-sessions-and-flash.md)**
 - ⏱️ **[Redis Queues, Priority Workers & Horizon Dashboard](./docs/queues-and-worker-dashboard.md)**
 - 📡 **[Realtime WebSockets & SSE Broadcasting](./docs/realtime-broadcasting.md)**
@@ -127,6 +128,7 @@ artisan flutter:build       # Compile Flutter Web into client/build/web
 artisan make:schema Post    # Create Ent database schema
 artisan make:controller Post # Create controller
 artisan make:auth            # Scaffold turnkey auth & TOTP 2FA controller
+artisan make:oauth GitHub    # Scaffold OAuth2 social auth controller
 artisan make:job SendMail   # Create async background job
 artisan make:notification InvoicePaid # Create multi-channel notification
 artisan make:mail Welcome   # Create mailable email

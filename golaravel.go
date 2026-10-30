@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/golaravel/golaravel/pkg/auth"
+	"github.com/golaravel/golaravel/pkg/auth/oauth"
 	"github.com/golaravel/golaravel/pkg/broadcast"
 	"github.com/golaravel/golaravel/pkg/cache"
 	"github.com/golaravel/golaravel/pkg/config"
@@ -256,6 +257,23 @@ var (
 		Allows:     auth.Allows,
 		TOTP:       auth.NewTOTPManager,
 		MultiGuard: auth.MultiGuard,
+	}
+
+	// Socialite provides access to multi-provider OAuth2 authentication (Laravel Socialite equivalent)
+	Socialite = struct {
+		Driver   func(name string) oauth.Provider
+		Build    func(name string, cfg oauth.Config) oauth.Provider
+		Register func(name string, factory oauth.FactoryFunc)
+		Mount    func(r router.RouteRegistrar, provider string, cb oauth.CallbackHandler, prefix ...string)
+		User     func(c *context.Context, provider string) (*oauth.User, error)
+	}{
+		Driver:   oauth.Driver,
+		Build:    oauth.Build,
+		Register: oauth.Register,
+		Mount:    oauth.MountRoutes,
+		User: func(c *context.Context, provider string) (*oauth.User, error) {
+			return oauth.Driver(provider).User(c)
+		},
 	}
 
 	// Broadcast provides access to real-time WebSockets & SSE broadcasting
