@@ -14,6 +14,7 @@ import (
 	"github.com/golaravel/golaravel/pkg/cache"
 	"github.com/golaravel/golaravel/pkg/config"
 	"github.com/golaravel/golaravel/pkg/context"
+	"github.com/golaravel/golaravel/pkg/database/factory"
 	"github.com/golaravel/golaravel/pkg/events"
 	"github.com/golaravel/golaravel/pkg/golaravel"
 	"github.com/golaravel/golaravel/pkg/hash"
@@ -56,6 +57,7 @@ type (
 	HTTPClient      = glhttp.Client
 	Limit           = ratelimit.Limit
 	RateLimitResult = ratelimit.Result
+	Faker           = factory.Faker
 )
 
 // Test creates a high-performance HTTP test harness client directly against any http.Handler or GoLaravel Engine.
@@ -71,6 +73,11 @@ func New() *Engine {
 // Default creates a GoLaravel application with production middlewares (Recovery, SecureHeaders, etc.).
 func Default() *Engine {
 	return golaravel.Default()
+}
+
+// NewFaker creates a new Faker dummy data generator.
+func NewFaker(seed ...int64) *factory.Faker {
+	return factory.NewFaker(seed...)
 }
 
 // BindModel registers an explicit model binder with compile-time type T.

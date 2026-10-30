@@ -62,6 +62,7 @@ All generators place files in deterministic directories:
 | `artisan make:middleware <Name>`| `app/middleware/<name>.go` | Creates custom HTTP middleware |
 | `artisan make:limiter <Name>`   | `app/limiters/<name>_limiter.go` | Creates a named sliding-window rate limiter |
 | `artisan make:migration <Name>`| `database/migrations/<timestamp>_<name>.sql` | Creates a new Atlas versioned migration |
+| `artisan make:factory <Name>`  | `database/factories/<name>_factory.go` | Creates an Ent model factory |
 | `artisan make:seeder <Name>`   | `database/seeders/<name>_seeder.go` | Creates a new database seeder class |
 
 ---

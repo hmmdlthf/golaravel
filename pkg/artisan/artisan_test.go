@@ -278,3 +278,37 @@ func TestMakeLimiter_Scaffolding(t *testing.T) {
 		t.Errorf("limiter file missing tiered throughput rule")
 	}
 }
+
+func TestMakeFactory_Scaffolding(t *testing.T) {
+	reg := NewRegistry()
+	if _, ok := reg.commands["make:factory"]; !ok {
+		t.Fatal("expected make:factory to be registered in artisan registry")
+	}
+
+	// Missing name
+	if err := makeFactory(nil); err == nil {
+		t.Fatal("expected error on missing factory name")
+	}
+
+	// Scaffold User factory
+	targetFile := "database/factories/user_factory.go"
+	_ = os.Remove(targetFile)
+	defer os.Remove(targetFile)
+
+	if err := makeFactory([]string{"User"}); err != nil {
+		t.Fatalf("makeFactory failed: %v", err)
+	}
+
+	content, err := os.ReadFile(targetFile)
+	if err != nil {
+		t.Fatalf("failed to read created factory file: %v", err)
+	}
+
+	str := string(content)
+	if !strings.Contains(str, "type UserDef struct") {
+		t.Errorf("factory file missing UserDef struct")
+	}
+	if !strings.Contains(str, "func UserFactory() *factory.Factory[UserDef]") {
+		t.Errorf("factory file missing UserFactory constructor")
+	}
+}

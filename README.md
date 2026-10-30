@@ -100,6 +100,7 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - ⚡ **[Routing & Controllers](./docs/routing-and-controllers.md)**
 - 🗄️ **[Database & Ent ORM](./docs/database-and-ent.md)**
 - 🔄 **[Database Migrations & Seeding (via Atlas)](./docs/migrations-and-seeding.md)**
+- 🎲 **[Ent Model Factories & Faker Data Seeder](./docs/model-factories-and-faker.md)**
 - 🛡️ **[Multi-Tenancy Privacy Scopes & Soft Deletes](./docs/multi-tenancy-and-soft-deletes.md)**
 - 🎨 **[Templating with Templ (Blade Equivalent)](./docs/templ-views.md)**
 - 📱 **[Flutter Multiplatform & Hybrid Serving](./docs/flutter-multiplatform.md)**
@@ -109,6 +110,9 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - 🔑 **[Socialite & OAuth2 Multi-Provider Authentication](./docs/socialite-oauth.md)**
 - 🍪 **[Stateful Sessions & Flash Messages](./docs/stateful-sessions-and-flash.md)**
 - ⏱️ **[Redis Queues, Priority Workers & Horizon Dashboard](./docs/queues-and-worker-dashboard.md)**
+- 📅 **[Cron Scheduler & Distributed Task Runner](./docs/task-scheduling.md)**
+- 📧 **[Advanced Mailables & Templ View Studio](./docs/mail-and-preview-studio.md)**
+- 🛑 **[Sliding-Window Rate Limiter & Tiered Throttling](./docs/rate-limiting-and-throttling.md)**
 - 📡 **[Realtime WebSockets & SSE Broadcasting](./docs/realtime-broadcasting.md)**
 - 🔔 **[Multi-Channel Notifications Engine](./docs/notifications.md)**
 - ⚡ **[Tagged Cache Engine & Atomic Locks](./docs/tagged-cache-and-locks.md)**
@@ -129,6 +133,8 @@ artisan flutter:build       # Compile Flutter Web into client/build/web
 
 # Scaffolding
 artisan make:schema Post    # Create Ent database schema
+artisan make:factory User   # Create Ent model factory
+artisan make:seeder Users   # Create database seeder
 artisan make:controller Post # Create controller
 artisan make:auth            # Scaffold turnkey auth & TOTP 2FA controller
 artisan make:oauth GitHub    # Scaffold OAuth2 social auth controller

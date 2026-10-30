@@ -174,6 +174,12 @@ func (r *Registry) registerDefaults() {
 	})
 
 	r.Register(&Command{
+		Name:        "make:factory",
+		Description: "Create a new Ent model factory (database/factories/<name>_factory.go)",
+		Run:         makeFactory,
+	})
+
+	r.Register(&Command{
 		Name:        "migrate",
 		Description: "Execute database migrations via Atlas (atlas migrate apply)",
 		Run:         runMigrate,

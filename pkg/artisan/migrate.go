@@ -82,6 +82,71 @@ func (s *%s) Seed(ctx context.Context, client any) error {
 	return nil
 }
 
+func makeFactory(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("missing factory name. Usage: artisan make:factory <Name>")
+	}
+
+	rawName := args[0]
+	name := strings.Title(rawName)
+	if strings.HasSuffix(name, "Factory") {
+		name = strings.TrimSuffix(name, "Factory")
+	}
+
+	filename := strings.ToLower(name) + "_factory.go"
+	dir := filepath.Join("database", "factories")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	targetPath := filepath.Join(dir, filename)
+
+	content := fmt.Sprintf(`package factories
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/golaravel/golaravel/pkg/database/factory"
+)
+
+// %sDef defines the generated attributes for %s.
+type %sDef struct {
+	Name  string
+	Email string
+}
+
+// %sFactory creates a model factory for %s.
+func %sFactory() *factory.Factory[%sDef] {
+	return factory.New[%sDef]().
+		Definition(func(f *factory.Faker) %sDef {
+			return %sDef{
+				Name:  f.Name(),
+				Email: f.Email(),
+			}
+		}).
+		Creator(func(ctx context.Context, client any, def %sDef) (any, error) {
+			// Example Ent client creator:
+			// c, ok := client.(*app.Client)
+			// if !ok {
+			//     return nil, fmt.Errorf("expected *app.Client, got %%T", client)
+			// }
+			// return c.%s.Create().
+			//     SetName(def.Name).
+			//     SetEmail(def.Email).
+			//     Save(ctx)
+			return &def, nil
+		})
+}
+`, name, name, name, name, name, name, name, name, name, name, name, name)
+
+	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+		return err
+	}
+
+	fmt.Printf("\033[32mINFO\033[0m Factory [%s] created successfully.\n", targetPath)
+	return nil
+}
+
 func runMigrate(args []string) error {
 	ctx := context.Background()
 	cfg := resolveMigratorConfig(args)
