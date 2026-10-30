@@ -218,36 +218,43 @@ func (n *node) insertChild(path, fullPath string, handlers []context.HandlerFunc
 			panic("catch-all routes are only allowed at the end of the path in '" + fullPath + "'")
 		}
 
-		if len(n.path) > 0 && n.path[len(n.path)-1] == '/' {
-			panic("catch-all conflict with existing wildcard in path '" + fullPath + "'")
+		if i > 0 {
+			if path[i-1] != '/' {
+				panic("no / before catch-all in path '" + fullPath + "'")
+			}
+			if len(n.path) == 0 {
+				n.path = path[:i]
+			} else {
+				child := &node{
+					path:     path[:i],
+					priority: 1,
+				}
+				n.indices += string([]byte{path[0]})
+				n.children = append(n.children, child)
+				n = child
+			}
+			path = path[i:]
+		} else {
+			if len(n.path) == 0 || n.path[len(n.path)-1] != '/' {
+				panic("no / before catch-all in path '" + fullPath + "'")
+			}
 		}
 
-		i--
-		if path[i] != '/' {
-			panic("no / before catch-all in path '" + fullPath + "'")
+		for _, ch := range n.children {
+			if ch.nType == catchAllNode {
+				panic("catch-all conflict with existing wildcard in path '" + fullPath + "'")
+			}
 		}
 
-		n.path = path[:i]
-
-		// First node: child with only the invalid path character
 		child := &node{
-			wildChild: true,
-			nType:     catchAllNode,
-		}
-		n.children = []*node{child}
-		n.indices = string('/')
-		n = child
-		n.priority++
-
-		// Second node: child containing the variable
-		child = &node{
-			path:      path[i:],
+			path:      wildcard,
 			nType:     catchAllNode,
 			handlers:  handlers,
 			priority:  1,
 			paramName: wildcard[1:],
 		}
-		n.children = []*node{child}
+		n.children = append(n.children, child)
+		n.wildChild = true
 		return
 	}
 }
@@ -337,6 +344,16 @@ walk:
 			// Exact match
 			if n.handlers != nil {
 				return n.handlers
+			}
+			if n.wildChild {
+				for _, ch := range n.children {
+					if ch.nType == catchAllNode {
+						if c != nil {
+							c.AddParam(ch.paramName, "")
+						}
+						return ch.handlers
+					}
+				}
 			}
 		}
 		return nil

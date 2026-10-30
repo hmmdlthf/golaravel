@@ -146,6 +146,41 @@ func TestRouter_NamedRoutesAndURL(t *testing.T) {
 	}
 }
 
+func TestRouter_CatchAllWithExistingPrefix(t *testing.T) {
+	r := New()
+	r.GET("/admin/assets/*filepath", func(c *context.Context) error {
+		return c.String(http.StatusOK, "assets:%s", c.Param("filepath"))
+	})
+	r.GET("/admin/api/schema", func(c *context.Context) error {
+		return c.String(http.StatusOK, "schema")
+	})
+	r.GET("/admin/*filepath", func(c *context.Context) error {
+		return c.String(http.StatusOK, "spa:%s", c.Param("filepath"))
+	})
+
+	// Test static API route
+	c := context.NewContext()
+	c.Reset(httptest.NewRecorder(), httptest.NewRequest("GET", "/admin/api/schema", nil))
+	handlers := r.Match("GET", "/admin/api/schema", c)
+	if handlers == nil {
+		t.Fatal("expected /admin/api/schema to match")
+	}
+
+	// Test assets route
+	c.Reset(httptest.NewRecorder(), httptest.NewRequest("GET", "/admin/assets/app.js", nil))
+	handlers = r.Match("GET", "/admin/assets/app.js", c)
+	if handlers == nil {
+		t.Fatal("expected /admin/assets/app.js to match")
+	}
+
+	// Test catch-all fallback route
+	c.Reset(httptest.NewRecorder(), httptest.NewRequest("GET", "/admin/dashboard", nil))
+	handlers = r.Match("GET", "/admin/dashboard", c)
+	if handlers == nil {
+		t.Fatal("expected /admin/dashboard to match catch-all")
+	}
+}
+
 func BenchmarkRouter_Match_Static(b *testing.B) {
 	r := New()
 	r.GET("/api/v1/users/profile/settings", func(c *context.Context) error {

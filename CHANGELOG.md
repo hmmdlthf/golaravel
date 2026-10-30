@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.0.3] - 2026-10-31
+
+### Fixed
+- **Radix Router Catch-All Wildcard Integration (`pkg/router/tree.go`)**:
+  - Fixed catch-all wildcard (`/*filepath`) registration when coexisting with existing static sub-branches under the same prefix (e.g., `/admin/assets/*`, `/admin/api/*`, and `/admin/*filepath`).
+  - Added support for root/prefix exact match fallback to catch-all route handlers with empty string parameter (e.g. `/admin/` gracefully serving SPA index HTML).
+  - Prevented invalid slice index and false conflict panics during radix child node insertion.
+
+---
+
 ## [v1.0.2] - 2026-10-31
 
 ### Fixed
