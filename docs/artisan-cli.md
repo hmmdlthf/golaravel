@@ -31,10 +31,24 @@ All generators place files in deterministic directories:
 | `artisan make:mail <Name>` | `app/mail/<name>.go` | Creates a fluent Mailable email class |
 | `artisan make:policy <Name>` | `app/policies/<name>_policy.go` | Creates an authorization policy |
 | `artisan make:middleware <Name>`| `app/middleware/<name>.go` | Creates custom HTTP middleware |
+| `artisan make:migration <Name>`| `database/migrations/<timestamp>_<name>.sql` | Creates a new Atlas versioned migration |
+| `artisan make:seeder <Name>`   | `database/seeders/<name>_seeder.go` | Creates a new database seeder class |
 
 ---
 
-## 3. Build & Generation Commands
+## 3. Database Migration & Seeding Commands
+
+| Command | Description |
+|---|---|
+| `artisan migrate` | Executes pending database migrations via Atlas |
+| `artisan migrate:diff <name>` | Computes schema diff between Ent schemas and DB and creates a versioned SQL migration |
+| `artisan migrate:status` | Inspects migration status and pending files |
+| `artisan migrate:rollback` | Reverts the last migration batch |
+| `artisan db:seed` | Seeds database records via `database/seeders` |
+
+---
+
+## 4. Build & Generation Commands
 
 ### `artisan generate`
 Runs both `templ generate` and `go generate ./...` to compile:
@@ -54,7 +68,7 @@ artisan flutter:build
 
 ---
 
-## 4. Server & Worker Commands
+## 5. Server & Worker Commands
 
 ### `artisan serve`
 Starts the HTTP development server on port 8080 (or custom port):

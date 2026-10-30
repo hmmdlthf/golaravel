@@ -117,6 +117,48 @@ func (r *Registry) registerDefaults() {
 	})
 
 	r.Register(&Command{
+		Name:        "make:migration",
+		Description: "Create a new Atlas versioned database migration (database/migrations/)",
+		Run:         makeMigration,
+	})
+
+	r.Register(&Command{
+		Name:        "make:seeder",
+		Description: "Create a new database seeder class (database/seeders/<name>_seeder.go)",
+		Run:         makeSeeder,
+	})
+
+	r.Register(&Command{
+		Name:        "migrate",
+		Description: "Execute database migrations via Atlas (atlas migrate apply)",
+		Run:         runMigrate,
+	})
+
+	r.Register(&Command{
+		Name:        "migrate:diff",
+		Description: "Compute Ent schema diff against DB and generate versioned migration",
+		Run:         runMigrateDiff,
+	})
+
+	r.Register(&Command{
+		Name:        "migrate:status",
+		Description: "View database migration statuses via Atlas",
+		Run:         runMigrateStatus,
+	})
+
+	r.Register(&Command{
+		Name:        "migrate:rollback",
+		Description: "Rollback database migrations via Atlas",
+		Run:         runMigrateRollback,
+	})
+
+	r.Register(&Command{
+		Name:        "db:seed",
+		Description: "Seed the database with records via database/seeders",
+		Run:         runDbSeed,
+	})
+
+	r.Register(&Command{
 		Name:        "generate",
 		Description: "Execute code generators (templ generate & ent generate)",
 		Run:         runGenerate,

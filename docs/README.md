@@ -26,48 +26,55 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
    - Atomic Transactions (`WithTx` / `client.Tx`)
    - High-Concurrency Connection Pooling
 
-4. **[Templating with Templ (Blade Equivalent)](./templ-views.md)**
+4. **[Database Migrations & Seeding (via Atlas)](./migrations-and-seeding.md)**
+   - Declarative Atlas Migration Workflow (`atlas.hcl`)
+   - Versioned Migrations (`artisan migrate`, `artisan migrate:diff`)
+   - Migration Status & Rollbacks (`migrate:status`, `migrate:rollback`)
+   - Hierarchical Database Seeding Engine (`artisan db:seed`, `make:seeder`)
+
+5. **[Templating with Templ (Blade Equivalent)](./templ-views.md)**
    - Why Templ Replaces Traditional Blade
    - Layout Components & Children
    - Blade-like Helpers (`@csrf`, `@method`)
    - Zero-Reflection Direct Stream Rendering
 
-5. **[Flutter Multiplatform & Hybrid Serving](./flutter-multiplatform.md)**
+6. **[Flutter Multiplatform & Hybrid Serving](./flutter-multiplatform.md)**
    - Multiplatform Support (Web, Windows, macOS, Linux, iOS, Android)
    - Serving Flutter Web from GoLaravel (`flutter.ServeWeb`)
    - **The Hybrid Micro-SSR Pattern**: Instant zero-JS public invoice/receipt pages vs Flutter SPA
 
-6. **[Inertia.js Protocol Adapter](./inertia.md)**
+7. **[Inertia.js Protocol Adapter](./inertia.md)**
    - Modern Monoliths without REST/GraphQL boilerplate
    - `c.Inertia("Component", props)`
    - Asset Versioning & Conflict Resolution
 
-7. **[Validation & Form Requests](./validation-and-form-requests.md)**
+8. **[Validation & Form Requests](./validation-and-form-requests.md)**
    - FormRequest Interface
    - Validation Rules (`Required`, `Email`, `MinLength`, etc.)
    - Laravel-Compatible **422 Unprocessable Entity** Error Bags
 
-8. **[Authentication & Security](./authentication-and-security.md)**
+9. **[Authentication & Security](./authentication-and-security.md)**
    - JWT Bearer Tokens for Flutter & APIs
    - Password Hashing (Argon2id & Bcrypt)
    - Authorization Gates & Policies
    - Built-in Middlewares (CSRF, CORS, RateLimiter, SecureHeaders)
 
-9. **[Queues & Task Scheduling](./queues-and-scheduling.md)**
-   - Async Background Jobs (`queue.Push`)
-   - Scalable Worker Pools (`artisan queue:work`)
-   - In-Process Fluent Cron Scheduler (`schedule.DailyAt`, `Hourly`)
+10. **[Queues & Task Scheduling](./queues-and-scheduling.md)**
+    - Async Background Jobs (`queue.Push`)
+    - Scalable Worker Pools (`artisan queue:work`)
+    - In-Process Fluent Cron Scheduler (`schedule.DailyAt`, `Hourly`)
 
-10. **[Realtime WebSockets & SSE Broadcasting (PRD §5.3)](./realtime-broadcasting.md)**
+11. **[Realtime WebSockets & SSE Broadcasting (PRD §5.3)](./realtime-broadcasting.md)**
     - Realtime Broadcasting Architecture (WebSockets vs SSE)
     - Live Ent Model Mutation Hooks (`EntMutationHook`)
     - Flutter and Browser Native Client Subscriptions
 
-11. **[Artisan CLI Reference](./artisan-cli.md)**
+12. **[Artisan CLI Reference](./artisan-cli.md)**
     - Project Creation (`artisan new`)
+    - Database Migrations & Seeding (`migrate`, `migrate:diff`, `db:seed`, etc.)
     - Generator Commands (`make:schema`, `make:controller`, `make:job`, etc.)
     - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`)
 
-12. **[Performance & Benchmarks](./benchmarks.md)**
+13. **[Performance & Benchmarks](./benchmarks.md)**
     - Zero-Allocation Architecture Methodology
     - Micro-benchmark Results vs Gin, Fiber, and Laravel Octane

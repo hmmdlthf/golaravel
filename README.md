@@ -63,7 +63,7 @@ golaravel/
 │   ├── storage/            # Multi-driver disk storage (Local, S3)
 │   ├── mail/               # Fluent email builder (LogDriver, SMTP)
 │   ├── config/             # Multi-environment config loader (.env, typed getters)
-│   ├── database/           # High-concurrency connection pool tuning & transactions
+│   ├── database/           # High-concurrency connection pools, Atlas migrations & Seeders
 │   └── artisan/            # Artisan command registry & generators
 ├── example/                # Full reference app (Ent ORM + Templ + Flutter Hybrid)
 └── benchmarks/             # Micro and end-to-end benchmark suite
@@ -91,6 +91,7 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - 🚀 **[Getting Started & Installation](./docs/installation.md)**
 - ⚡ **[Routing & Controllers](./docs/routing-and-controllers.md)**
 - 🗄️ **[Database & Ent ORM](./docs/database-and-ent.md)**
+- 🔄 **[Database Migrations & Seeding (via Atlas)](./docs/migrations-and-seeding.md)**
 - 🎨 **[Templating with Templ (Blade Equivalent)](./docs/templ-views.md)**
 - 📱 **[Flutter Multiplatform & Hybrid Serving](./docs/flutter-multiplatform.md)**
 - ⚛️ **[Inertia.js Protocol Adapter](./docs/inertia.md)**

@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"log"
 	"log/slog"
 	"os"
@@ -13,14 +11,15 @@ import (
 
 	"github.com/golaravel/golaravel/example/app"
 	"github.com/golaravel/golaravel/example/app/handlers"
+	"github.com/golaravel/golaravel/example/database/seeders"
 	"github.com/golaravel/golaravel/pkg/artisan"
 	"github.com/golaravel/golaravel/pkg/auth"
 	"github.com/golaravel/golaravel/pkg/broadcast"
 	"github.com/golaravel/golaravel/pkg/container"
 	gcontext "github.com/golaravel/golaravel/pkg/context"
+	"github.com/golaravel/golaravel/pkg/database"
 	"github.com/golaravel/golaravel/pkg/flutter"
 	"github.com/golaravel/golaravel/pkg/golaravel"
-	"github.com/golaravel/golaravel/pkg/hash"
 	"github.com/golaravel/golaravel/pkg/middleware"
 )
 
@@ -39,66 +38,11 @@ func main() {
 		log.Fatalf("failed creating schema resources: %v", err)
 	}
 
-	// 2. Seed Admin User
-	hashedPassword, _ := hash.Make("password123")
-	admin, err := client.User.Create().
-		SetName("Ahmad (Admin)").
-		SetEmail("admin@golaravel.dev").
-		SetPassword(hashedPassword).
-		SetRole("admin").
-		Save(ctx)
-	if err != nil {
-		log.Fatalf("failed seeding admin user: %v", err)
+	// 2. Populate database with initial records via GoLaravel Seeder Engine
+	seederRunner := database.NewRunner(client)
+	if err := seederRunner.Call(ctx, seeders.NewDatabaseSeeder()); err != nil {
+		log.Fatalf("failed seeding database: %v", err)
 	}
-
-	// 3. Seed Sample Invoices with LineItems
-	token1 := randomToken()
-	inv1, _ := client.Invoice.Create().
-		SetOwner(admin).
-		SetInvoiceNumber("INV-2026-001").
-		SetCustomerName("Acme Global Logistics").
-		SetCustomerEmail("billing@acme.com").
-		SetStatus("sent").
-		SetAmount(3850.00).
-		SetDueDate(time.Now().Add(10 * 24 * time.Hour)).
-		SetToken(token1).
-		Save(ctx)
-
-	_, _ = client.LineItem.Create().
-		SetInvoice(inv1).
-		SetDescription("Dedicated GoLaravel Enterprise Cluster (128 Cores)").
-		SetQuantity(1).
-		SetUnitPrice(3000.00).
-		SetTotal(3000.00).
-		Save(ctx)
-
-	_, _ = client.LineItem.Create().
-		SetInvoice(inv1).
-		SetDescription("Premium 24/7 SLA & Direct Engineering Support").
-		SetQuantity(1).
-		SetUnitPrice(850.00).
-		SetTotal(850.00).
-		Save(ctx)
-
-	token2 := randomToken()
-	inv2, _ := client.Invoice.Create().
-		SetOwner(admin).
-		SetInvoiceNumber("INV-2026-002").
-		SetCustomerName("Starlight AI Labs").
-		SetCustomerEmail("accounts@starlight.ai").
-		SetStatus("paid").
-		SetAmount(1200.00).
-		SetDueDate(time.Now().Add(-2 * 24 * time.Hour)).
-		SetToken(token2).
-		Save(ctx)
-
-	_, _ = client.LineItem.Create().
-		SetInvoice(inv2).
-		SetDescription("Flutter Multiplatform Integration Consulting").
-		SetQuantity(8).
-		SetUnitPrice(150.00).
-		SetTotal(1200.00).
-		Save(ctx)
 
 	// Attach Ent ORM real-time mutation hook:
 	// Automatically broadcasts invoice.created, invoice.updated, invoice.deleted
@@ -162,18 +106,18 @@ func main() {
 		port = ":8080"
 	}
 
+	firstInvoice, _ := client.Invoice.Query().First(ctx)
+	sampleToken := "demo-token"
+	if firstInvoice != nil {
+		sampleToken = firstInvoice.Token
+	}
+
 	slog.Info("GoLaravel SaaS Showcase Server running",
 		"url", "http://localhost"+port,
-		"sample_invoice_url", "http://localhost"+port+"/invoice/"+token1,
+		"sample_invoice_url", "http://localhost"+port+"/invoice/"+sampleToken,
 	)
 
 	if err := appEngine.Run(port); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
-}
-
-func randomToken() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
 }

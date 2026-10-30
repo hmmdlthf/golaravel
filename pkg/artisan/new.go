@@ -249,14 +249,52 @@ templ InvoiceView(invoiceNum string, customerName string, amount float64, isPaid
 `
 	_ = os.WriteFile(filepath.Join(viewsDir, "invoice.templ"), []byte(invoiceTemplContent), 0644)
 
-	// 5. If Flutter or Hybrid, create the Flutter multi-platform client
+	// 5. Database migrations & seeders setup (via Atlas)
+	migrationsDir := filepath.Join(baseDir, "database", "migrations")
+	_ = os.MkdirAll(migrationsDir, 0755)
+	_ = os.WriteFile(filepath.Join(migrationsDir, ".gitkeep"), []byte(""), 0644)
+
+	seedersDir := filepath.Join(baseDir, "database", "seeders")
+	_ = os.MkdirAll(seedersDir, 0755)
+	databaseSeederContent := `package seeders
+
+import (
+	"context"
+	"log/slog"
+)
+
+// DatabaseSeeder is the root seeder for populating database records.
+type DatabaseSeeder struct{}
+
+// Seed runs all project seeders.
+func (s *DatabaseSeeder) Seed(ctx context.Context, client any) error {
+	slog.Info("Running DatabaseSeeder")
+	// Example: Call other seeders sequentially
+	// runner := database.NewRunner(client)
+	// return runner.Call(ctx, &UserSeeder{})
+	return nil
+}
+`
+	_ = os.WriteFile(filepath.Join(seedersDir, "database_seeder.go"), []byte(databaseSeederContent), 0644)
+
+	atlasHcl := `env "local" {
+  src = "ent://app/schema"
+  dev = "sqlite://file?mode=memory&cache=shared"
+  migration {
+    dir = "file://database/migrations"
+  }
+}
+`
+	_ = os.WriteFile(filepath.Join(baseDir, "atlas.hcl"), []byte(atlasHcl), 0644)
+
+	// 6. If Flutter or Hybrid, create the Flutter multi-platform client
 	if cfg.Stack == "flutter" || cfg.Stack == "hybrid" {
 		if err := scaffoldFlutterApp(baseDir, cfg); err != nil {
 			fmt.Printf("\033[33mWARN\033[0m Flutter scaffolding warning: %v\n", err)
 		}
 	}
 
-	// 6. Generate main.go
+	// 7. Generate main.go
 	if err := generateMainGo(baseDir, cfg); err != nil {
 		return err
 	}
