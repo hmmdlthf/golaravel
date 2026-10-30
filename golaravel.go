@@ -143,11 +143,25 @@ var (
 		Lock:            cache.Lock,
 	}
 
-	// Queue provides access to background job dispatching
+	// Queue provides access to background job dispatching, priority queues, and dashboard
 	Queue = struct {
-		Push func(job queue.Job) error
+		Push           func(job queue.Job) error
+		Later          func(delay time.Duration, job queue.Job) error
+		OnQueue        func(name string) *queue.PendingDispatch
+		RegisterJob    func(job queue.Job)
+		StartWorkers   func(ctx stdContext.Context, concurrency int, queues ...string)
+		Stop           func()
+		Default        func() *queue.Queue
+		MountDashboard func(r router.RouteRegistrar, prefix ...string)
 	}{
-		Push: queue.Push,
+		Push:           queue.Push,
+		Later:          queue.Later,
+		OnQueue:        queue.OnQueue,
+		RegisterJob:    queue.RegisterJobType,
+		StartWorkers:   queue.StartWorkers,
+		Stop:           queue.Stop,
+		Default:        queue.DefaultQueue,
+		MountDashboard: queue.MountDashboard,
 	}
 
 	// Events provides access to event dispatching

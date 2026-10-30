@@ -1,13 +1,18 @@
 package artisan
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 
+	"github.com/golaravel/golaravel/pkg/queue"
 	"github.com/golaravel/golaravel/pkg/router"
 )
 
@@ -196,8 +201,26 @@ func (r *Registry) registerDefaults() {
 
 	r.Register(&Command{
 		Name:        "queue:work",
-		Description: "Launch background queue worker pool",
+		Description: "Launch background queue worker pool (--queue=..., --concurrency=..., --driver=...)",
 		Run:         runQueueWork,
+	})
+
+	r.Register(&Command{
+		Name:        "queue:failed",
+		Description: "List all failed jobs in Dead-Letter Queue (DLQ)",
+		Run:         runQueueFailed,
+	})
+
+	r.Register(&Command{
+		Name:        "queue:retry",
+		Description: "Retry a failed queue job (Usage: artisan queue:retry <id|all>)",
+		Run:         runQueueRetry,
+	})
+
+	r.Register(&Command{
+		Name:        "queue:flush",
+		Description: "Flush all failed jobs from Dead-Letter Queue (DLQ)",
+		Run:         runQueueFlush,
 	})
 
 	r.Register(&Command{
@@ -505,10 +528,136 @@ func (s *%s[Q]) Apply(ctx context.Context, query Q) error {
 }
 
 func runQueueWork(args []string) error {
-	fmt.Println("\033[32mINFO\033[0m Starting GoLaravel queue worker pool...")
+	concurrency := 2
+	queues := []string{"high", "default", "low"}
+	driverName := "memory"
+
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "--concurrency=") {
+			if n, err := strconv.Atoi(strings.TrimPrefix(arg, "--concurrency=")); err == nil && n > 0 {
+				concurrency = n
+			}
+		} else if strings.HasPrefix(arg, "--queue=") {
+			raw := strings.TrimPrefix(arg, "--queue=")
+			parts := strings.Split(raw, ",")
+			var qList []string
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					qList = append(qList, p)
+				}
+			}
+			if len(qList) > 0 {
+				queues = qList
+			}
+		} else if strings.HasPrefix(arg, "--driver=") {
+			driverName = strings.TrimPrefix(arg, "--driver=")
+		}
+	}
+
+	q := queue.DefaultQueue()
+	if driverName == "redis" {
+		addr := os.Getenv("REDIS_HOST")
+		if addr == "" {
+			addr = "127.0.0.1"
+		}
+		port := os.Getenv("REDIS_PORT")
+		if port == "" {
+			port = "6379"
+		}
+		cfg := queue.RedisConfig{
+			Addr:     addr + ":" + port,
+			Password: os.Getenv("REDIS_PASSWORD"),
+			Prefix:   "golaravel:queue:",
+		}
+		rd, err := queue.NewRedisDriver(cfg)
+		if err != nil {
+			return fmt.Errorf("failed to connect to Redis queue: %w", err)
+		}
+		q.SetDriver(rd)
+		q.SetDLQ(queue.NewRedisFailedJobStore(cfg))
+	}
+
+	fmt.Printf("\033[32mINFO\033[0m Starting GoLaravel queue worker pool [Driver: %s, Concurrency: %d, Queues: %s]...\n",
+		driverName, concurrency, strings.Join(queues, ", "))
 	fmt.Println("Listening for background jobs [Ctrl+C to stop]...")
-	// Blocks until interrupt
-	select {}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	q.StartWorkers(ctx, concurrency, queues...)
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	<-sigCh
+
+	fmt.Println("\n\033[33mWARN\033[0m Shutting down queue worker pool gracefully...")
+	q.Stop()
+	fmt.Println("\033[32mSUCCESS\033[0m Queue workers stopped.")
+	return nil
+}
+
+func runQueueFailed(args []string) error {
+	dlq := queue.DefaultQueue().DLQ()
+	jobs, err := dlq.All(100, 0)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve DLQ jobs: %w", err)
+	}
+
+	if len(jobs) == 0 {
+		fmt.Println("\033[32mINFO\033[0m No failed jobs found in Dead-Letter Queue.")
+		return nil
+	}
+
+	fmt.Printf("\n\033[33mDead-Letter Queue (%d failed jobs):\033[0m\n", len(jobs))
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "  ID\tQUEUE\tTYPE\tFAILED AT\tERROR")
+	fmt.Fprintln(w, "  --\t-----\t----\t---------\t-----")
+	for _, j := range jobs {
+		errMsg := j.Exception
+		if len(errMsg) > 40 {
+			errMsg = errMsg[:37] + "..."
+		}
+		fmt.Fprintf(w, "  \033[36m%s\033[0m\t%s\t\033[1;37m%s\033[0m\t%s\t\033[31m%s\033[0m\n",
+			j.ID, j.Queue, j.Type, j.FailedAt.Format("2006-01-02 15:04:05"), errMsg)
+	}
+	_ = w.Flush()
+	fmt.Println()
+	return nil
+}
+
+func runQueueRetry(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("missing target job ID. Usage: artisan queue:retry <id|all>")
+	}
+
+	target := args[0]
+	q := queue.DefaultQueue()
+
+	if target == "all" {
+		count, err := q.RetryAllFailed()
+		if err != nil {
+			return fmt.Errorf("failed to retry failed jobs: %w", err)
+		}
+		fmt.Printf("\033[32mSUCCESS\033[0m Retried %d failed job(s).\n", count)
+		return nil
+	}
+
+	if err := q.RetryFailed(target); err != nil {
+		return fmt.Errorf("failed to retry job [%s]: %w", target, err)
+	}
+
+	fmt.Printf("\033[32mSUCCESS\033[0m Failed job [%s] re-queued successfully.\n", target)
+	return nil
+}
+
+func runQueueFlush(args []string) error {
+	dlq := queue.DefaultQueue().DLQ()
+	if err := dlq.Flush(); err != nil {
+		return fmt.Errorf("failed to flush Dead-Letter Queue: %w", err)
+	}
+	fmt.Println("\033[32mSUCCESS\033[0m All failed jobs have been flushed from Dead-Letter Queue.")
+	return nil
 }
 
 func runServe(args []string) error {

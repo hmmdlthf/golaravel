@@ -105,10 +105,13 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - 🛡️ **[Validation & Form Requests](./docs/validation-and-form-requests.md)**
 - 🔒 **[Authentication & Security](./docs/authentication-and-security.md)**
 - 🍪 **[Stateful Sessions & Flash Messages](./docs/stateful-sessions-and-flash.md)**
-- ⏱️ **[Queues & Task Scheduling](./docs/queues-and-scheduling.md)**
+- ⏱️ **[Redis Queues, Priority Workers & Horizon Dashboard](./docs/queues-and-worker-dashboard.md)**
 - 📡 **[Realtime WebSockets & SSE Broadcasting](./docs/realtime-broadcasting.md)**
 - 🔔 **[Multi-Channel Notifications Engine](./docs/notifications.md)**
 - ⚡ **[Tagged Cache Engine & Atomic Locks](./docs/tagged-cache-and-locks.md)**
+- ☁️ **[Cloud Filesystem (S3, MinIO, Local Disk) & Presigned URLs](./docs/cloud-storage-and-s3.md)**
+- 🧪 **[Full-Stack HTTP Testing Harness & Assertion Toolkit](./docs/testing.md)**
+- 🌐 **[Fluent HTTP Client & Mocking Engine](./docs/fluent-http-client.md)**
 - 🛠️ **[Artisan CLI Reference](./docs/artisan-cli.md)**
 - 📊 **[Performance Benchmarks](./docs/benchmarks.md)**
 
@@ -134,5 +137,8 @@ artisan make:middleware Auth# Create middleware
 
 # Server & Workers
 artisan serve               # Start HTTP development server
-artisan queue:work          # Launch background queue workers
+artisan queue:work          # Launch background queue worker pool
+artisan queue:failed        # List failed jobs in Dead-Letter Queue (DLQ)
+artisan queue:retry <id|all># Retry failed job(s) from DLQ
+artisan queue:flush         # Flush all failed jobs from DLQ
 ```

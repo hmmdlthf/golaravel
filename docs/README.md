@@ -71,10 +71,14 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
     - One-Request Flash Messages (`session.Flash`)
     - Session-Backed CSRF Verification (`VerifyCSRFToken`)
 
-11. **[Queues & Task Scheduling](./queues-and-scheduling.md)**
-    - Async Background Jobs (`queue.Push`)
-    - Scalable Worker Pools (`artisan queue:work`)
-    - In-Process Fluent Cron Scheduler (`schedule.DailyAt`, `Hourly`)
+11. **[Redis Queue Driver, Priority Workers & Horizon Dashboard (PRD §6)](./queues-and-worker-dashboard.md)**
+    - Pluggable Drivers (`MemoryDriver`, `RedisDriver` with pure Go RESP client)
+    - Multi-Queue Priority Polling (`high` -> `default` -> `low`)
+    - Job Extensions: `Queueable`, `Delayable`, `Retryable`, `Timeoutable`
+    - Dead-Letter Queue (DLQ) & `FailedJobStore` (Memory & Redis Hashes)
+    - Horizon-Equivalent Worker Dashboard Web UI & JSON APIs (`/queue/dashboard`)
+    - Artisan CLI Queue Operations (`queue:work`, `queue:failed`, `queue:retry`, `queue:flush`)
+    - Task Scheduling (`pkg/schedule`, `DailyAt`, `Hourly`) (see [Queues & Scheduling](./queues-and-scheduling.md))
 
 12. **[Realtime WebSockets & SSE Broadcasting (PRD §5.3)](./realtime-broadcasting.md)**
     - Realtime Broadcasting Architecture (WebSockets vs SSE)
