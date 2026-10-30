@@ -69,12 +69,18 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
     - Live Ent Model Mutation Hooks (`EntMutationHook`)
     - Flutter and Browser Native Client Subscriptions
 
-12. **[Artisan CLI Reference](./artisan-cli.md)**
+12. **[Multi-Channel Notifications Engine (PRD §7)](./notifications.md)**
+    - Unified Notification Delivery (Email, In-App Database, Broadcast, Slack, SMS)
+    - Notifiable Recipients & On-Demand Routing
+    - Asynchronous Queued Notifications (`ShouldQueue`)
+    - Generator Command (`artisan make:notification`)
+
+13. **[Artisan CLI Reference](./artisan-cli.md)**
     - Project Creation (`artisan new`)
     - Database Migrations & Seeding (`migrate`, `migrate:diff`, `db:seed`, etc.)
-    - Generator Commands (`make:schema`, `make:controller`, `make:job`, etc.)
+    - Generator Commands (`make:schema`, `make:controller`, `make:job`, `make:notification`, etc.)
     - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`)
 
-13. **[Performance & Benchmarks](./benchmarks.md)**
+14. **[Performance & Benchmarks](./benchmarks.md)**
     - Zero-Allocation Architecture Methodology
     - Micro-benchmark Results vs Gin, Fiber, and Laravel Octane

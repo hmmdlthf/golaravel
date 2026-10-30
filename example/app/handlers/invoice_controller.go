@@ -9,12 +9,14 @@ import (
 
 	"github.com/golaravel/golaravel/example/app"
 	"github.com/golaravel/golaravel/example/app/invoice"
+	"github.com/golaravel/golaravel/example/app/notifications"
 	"github.com/golaravel/golaravel/example/app/user"
 	"github.com/golaravel/golaravel/example/app/views"
 	"github.com/golaravel/golaravel/pkg/auth"
 	"github.com/golaravel/golaravel/pkg/container"
 	"github.com/golaravel/golaravel/pkg/context"
 	"github.com/golaravel/golaravel/pkg/hash"
+	"github.com/golaravel/golaravel/pkg/notification"
 	"github.com/golaravel/golaravel/pkg/validation"
 )
 
@@ -184,6 +186,12 @@ func (ctrl *InvoiceController) ApiPay(c *context.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusNotFound, map[string]string{"error": "Invoice not found"})
 	}
+
+	// Dispatch multi-channel notification (Email + In-App Database Alert + Realtime WebSockets/SSE)
+	recipient := notification.OnDemand("mail", inv.CustomerEmail).
+		Route("database", fmt.Sprintf("invoice_%d", inv.ID)).
+		Route("broadcast", "invoices")
+	_ = notification.SendOne(c.Context(), recipient, notifications.NewInvoicePaidNotification(inv.InvoiceNumber, inv.CustomerName, inv.Amount))
 
 	return c.JSON(http.StatusOK, inv)
 }

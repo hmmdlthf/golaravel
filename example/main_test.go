@@ -24,6 +24,7 @@ import (
 	"github.com/golaravel/golaravel/pkg/golaravel"
 	"github.com/golaravel/golaravel/pkg/hash"
 	"github.com/golaravel/golaravel/pkg/middleware"
+	"github.com/golaravel/golaravel/pkg/notification"
 	"github.com/golaravel/golaravel/pkg/router"
 )
 
@@ -210,5 +211,21 @@ func TestShowcase_E2E(t *testing.T) {
 	}
 	if !strings.Contains(w5.Body.String(), "flutter") {
 		t.Fatalf("expected flutter bootstrap in web index: %s", w5.Body.String())
+	}
+
+	// 6. Test Pay Invoice API triggers multi-channel notification
+	w6 := httptest.NewRecorder()
+	req6 := httptest.NewRequest("PATCH", "/api/invoices/1/pay", nil)
+	engine.ServeHTTP(w6, req6)
+	if w6.Code != http.StatusOK {
+		t.Fatalf("expected 200 for pay invoice, got %d: %s", w6.Code, w6.Body.String())
+	}
+
+	unreadNotifs, err := notification.GetDatabaseStore().GetUnread(context.Background(), "invoice_1")
+	if err != nil || len(unreadNotifs) == 0 {
+		t.Fatalf("expected in-app database notification for invoice_1, got %d (err: %v)", len(unreadNotifs), err)
+	}
+	if unreadNotifs[0].Type != "InvoicePaid" {
+		t.Errorf("expected notification type InvoicePaid, got %s", unreadNotifs[0].Type)
 	}
 }

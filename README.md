@@ -62,6 +62,8 @@ golaravel/
 │   ├── cache/              # Memory & Redis cache with TTL and Remember()
 │   ├── storage/            # Multi-driver disk storage (Local, S3)
 │   ├── mail/               # Fluent email builder (LogDriver, SMTP)
+│   ├── broadcast/          # Realtime WebSockets & SSE broadcasting with Ent hooks
+│   ├── notification/       # Multi-channel notifications (Mail, DB, Broadcast, Slack, SMS)
 │   ├── config/             # Multi-environment config loader (.env, typed getters)
 │   ├── database/           # High-concurrency connection pools, Atlas migrations & Seeders
 │   └── artisan/            # Artisan command registry & generators
@@ -99,6 +101,7 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - 🔒 **[Authentication & Security](./docs/authentication-and-security.md)**
 - ⏱️ **[Queues & Task Scheduling](./docs/queues-and-scheduling.md)**
 - 📡 **[Realtime WebSockets & SSE Broadcasting](./docs/realtime-broadcasting.md)**
+- 🔔 **[Multi-Channel Notifications Engine](./docs/notifications.md)**
 - 🛠️ **[Artisan CLI Reference](./docs/artisan-cli.md)**
 - 📊 **[Performance Benchmarks](./docs/benchmarks.md)**
 
@@ -114,6 +117,7 @@ artisan flutter:build       # Compile Flutter Web into client/build/web
 artisan make:schema Post    # Create Ent database schema
 artisan make:controller Post # Create controller
 artisan make:job SendMail   # Create async background job
+artisan make:notification InvoicePaid # Create multi-channel notification
 artisan make:mail Welcome   # Create mailable email
 artisan make:policy Post    # Create authorization policy
 artisan make:view posts     # Create Templ view

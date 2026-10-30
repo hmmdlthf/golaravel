@@ -12,6 +12,7 @@ import (
 	"github.com/golaravel/golaravel/pkg/golaravel"
 	"github.com/golaravel/golaravel/pkg/hash"
 	"github.com/golaravel/golaravel/pkg/mail"
+	"github.com/golaravel/golaravel/pkg/notification"
 	"github.com/golaravel/golaravel/pkg/queue"
 	"github.com/golaravel/golaravel/pkg/router"
 	"github.com/golaravel/golaravel/pkg/schedule"
@@ -178,5 +179,20 @@ var (
 		Subscribe:        broadcast.Subscribe,
 		WebSocketHandler: broadcast.WebSocketHandler,
 		SSEHandler:       broadcast.SSEHandler,
+	}
+
+	// Notification provides access to multi-channel notifications (mail, database, broadcast, slack, sms)
+	Notification = struct {
+		Send       func(ctx stdContext.Context, notifiables []notification.Notifiable, n notification.Notification) error
+		SendOne    func(ctx stdContext.Context, notifiable notification.Notifiable, n notification.Notification) error
+		SendNow    func(ctx stdContext.Context, notifiables []notification.Notifiable, n notification.Notification) error
+		SendNowOne func(ctx stdContext.Context, notifiable notification.Notifiable, n notification.Notification) error
+		OnDemand   func(channel, destination string) *notification.AnonymousNotifiable
+	}{
+		Send:       notification.Send,
+		SendOne:    notification.SendOne,
+		SendNow:    notification.SendNow,
+		SendNowOne: notification.SendNowOne,
+		OnDemand:   notification.OnDemand,
 	}
 )

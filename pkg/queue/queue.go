@@ -163,6 +163,7 @@ func (q *Queue) executeJob(ctx context.Context, payload *JobPayload) {
 }
 
 // Global helper functions
+func DefaultQueue() *Queue                                    { return globalQueue }
 func Push(job Job) error                                      { return globalQueue.Push(job) }
 func StartWorkers(ctx context.Context, concurrency int)      { globalQueue.StartWorkers(ctx, concurrency) }
 func Stop()                                                   { globalQueue.Stop() }

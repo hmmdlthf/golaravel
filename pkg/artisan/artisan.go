@@ -117,6 +117,12 @@ func (r *Registry) registerDefaults() {
 	})
 
 	r.Register(&Command{
+		Name:        "make:notification",
+		Description: "Create a multi-channel notification class (app/notifications/<name>.go)",
+		Run:         makeNotification,
+	})
+
+	r.Register(&Command{
 		Name:        "make:migration",
 		Description: "Create a new Atlas versioned database migration (database/migrations/)",
 		Run:         makeMigration,
@@ -303,6 +309,87 @@ func (p *%s) Delete(user auth.Authenticatable, record any) bool {
 		return err
 	}
 	fmt.Printf("\033[32mINFO\033[0m Policy [%s] created successfully.\n", targetPath)
+	return nil
+}
+
+func makeNotification(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("missing notification name. Usage: artisan make:notification <Name>")
+	}
+	name := strings.Title(args[0])
+	if !strings.HasSuffix(name, "Notification") {
+		name += "Notification"
+	}
+	filename := strings.ToLower(strings.TrimSuffix(name, "Notification")) + "_notification.go"
+	dir := filepath.Join("app", "notifications")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	targetPath := filepath.Join(dir, filename)
+
+	content := fmt.Sprintf(`package notifications
+
+import (
+	"fmt"
+
+	"github.com/golaravel/golaravel/pkg/broadcast"
+	"github.com/golaravel/golaravel/pkg/mail"
+	"github.com/golaravel/golaravel/pkg/notification"
+)
+
+// %s delivers multi-channel alerts (mail, database, broadcast, slack, sms).
+type %s struct {
+	Title   string
+	Message string
+}
+
+// New%s creates a new %s instance.
+func New%s(title, message string) *%s {
+	return &%s{
+		Title:   title,
+		Message: message,
+	}
+}
+
+// Via determines which channels the notification should be delivered on.
+func (n *%s) Via(notifiable notification.Notifiable) []string {
+	return []string{"mail", "database", "broadcast"}
+}
+
+// ToMail constructs the email message.
+func (n *%s) ToMail(notifiable notification.Notifiable) (*mail.Message, error) {
+	return mail.NewMessage().
+		Subject(n.Title).
+		HTML(fmt.Sprintf("<h2>%%s</h2><p>%%s</p>", n.Title, n.Message)), nil
+}
+
+// ToDatabase constructs the in-app database alert record.
+func (n *%s) ToDatabase(notifiable notification.Notifiable) (*notification.DatabaseMessage, error) {
+	return &notification.DatabaseMessage{
+		Type: "%s",
+		Data: map[string]any{
+			"title":   n.Title,
+			"message": n.Message,
+		},
+	}, nil
+}
+
+// ToBroadcast constructs the real-time push event for WebSockets and SSE.
+func (n *%s) ToBroadcast(notifiable notification.Notifiable) (*broadcast.Message, error) {
+	return &broadcast.Message{
+		Event: "notification.new",
+		Data: map[string]any{
+			"title":   n.Title,
+			"message": n.Message,
+		},
+	}, nil
+}
+`, name, name, name, name, name, name, name, name, name, name, name, name)
+
+	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+		return err
+	}
+	fmt.Printf("\033[32mINFO\033[0m Notification [%s] created successfully.\n", targetPath)
 	return nil
 }
 
