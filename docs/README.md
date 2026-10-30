@@ -76,23 +76,28 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
     - Scalable Worker Pools (`artisan queue:work`)
     - In-Process Fluent Cron Scheduler (`schedule.DailyAt`, `Hourly`)
 
-11. **[Realtime WebSockets & SSE Broadcasting (PRD §5.3)](./realtime-broadcasting.md)**
+12. **[Realtime WebSockets & SSE Broadcasting (PRD §5.3)](./realtime-broadcasting.md)**
     - Realtime Broadcasting Architecture (WebSockets vs SSE)
     - Live Ent Model Mutation Hooks (`EntMutationHook`)
     - Flutter and Browser Native Client Subscriptions
 
-12. **[Multi-Channel Notifications Engine (PRD §7)](./notifications.md)**
+13. **[Multi-Channel Notifications Engine (PRD §7)](./notifications.md)**
     - Unified Notification Delivery (Email, In-App Database, Broadcast, Slack, SMS)
     - Notifiable Recipients & On-Demand Routing
     - Asynchronous Queued Notifications (`ShouldQueue`)
     - Generator Command (`artisan make:notification`)
 
-13. **[Artisan CLI Reference](./artisan-cli.md)**
+14. **[Tagged Cache Engine & Atomic Locks (PRD §7)](./tagged-cache-and-locks.md)**
+    - O(1) Tagged Cache Invalidation (`Cache.Tags(...)`)
+    - Distributed & In-Process Atomic Locks (`Cache.Lock(...)`)
+    - Automatic Lock Expiration & Auto-Release (`Lock.Get`, `Lock.Block`)
+
+15. **[Artisan CLI Reference](./artisan-cli.md)**
     - Project Creation (`artisan new`)
     - Database Migrations & Seeding (`migrate`, `migrate:diff`, `db:seed`, etc.)
-    - Generator Commands (`make:schema`, `make:controller`, `make:job`, `make:notification`, etc.)
+    - Generator Commands (`make:schema`, `make:controller`, `make:job`, `make:notification`, `make:scope`, etc.)
     - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`)
 
-14. **[Performance & Benchmarks](./benchmarks.md)**
+16. **[Performance & Benchmarks](./benchmarks.md)**
     - Zero-Allocation Architecture Methodology
     - Micro-benchmark Results vs Gin, Fiber, and Laravel Octane

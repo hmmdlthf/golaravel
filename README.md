@@ -106,6 +106,7 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - ⏱️ **[Queues & Task Scheduling](./docs/queues-and-scheduling.md)**
 - 📡 **[Realtime WebSockets & SSE Broadcasting](./docs/realtime-broadcasting.md)**
 - 🔔 **[Multi-Channel Notifications Engine](./docs/notifications.md)**
+- ⚡ **[Tagged Cache Engine & Atomic Locks](./docs/tagged-cache-and-locks.md)**
 - 🛠️ **[Artisan CLI Reference](./docs/artisan-cli.md)**
 - 📊 **[Performance Benchmarks](./docs/benchmarks.md)**
 

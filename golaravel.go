@@ -2,6 +2,7 @@ package golaravel
 
 import (
 	stdContext "context"
+	"time"
 
 	"github.com/golaravel/golaravel/pkg/auth"
 	"github.com/golaravel/golaravel/pkg/broadcast"
@@ -89,19 +90,39 @@ var (
 		LoadEnv: config.LoadEnv,
 	}
 
-	// Cache provides access to the in-memory/Redis caching layer
+	// Cache provides access to the in-memory/Redis caching layer, tagged cache, and atomic locks
 	Cache = struct {
-		Get      func(key string) (any, bool)
-		GetString func(key string) string
-		Put      func(key string, val any, ttl ...any)
-		Remember func(key string, ttl ...any)
-		Forget   func(key string)
-		Flush    func()
+		Get             func(key string) (any, bool)
+		GetString       func(key string, defaultVal ...string) string
+		GetInt          func(key string, defaultVal ...int) int
+		GetBool         func(key string, defaultVal ...bool) bool
+		Put             func(key string, val any, ttl time.Duration) error
+		Add             func(key string, val any, ttl time.Duration) (bool, error)
+		Increment       func(key string, value ...int64) (int64, error)
+		Decrement       func(key string, value ...int64) (int64, error)
+		Remember        func(key string, ttl time.Duration, fn func() (any, error)) (any, error)
+		RememberForever func(key string, fn func() (any, error)) (any, error)
+		Pull            func(key string, defaultVal ...any) any
+		Forget          func(key string) error
+		Flush           func() error
+		Tags            func(names ...string) *cache.TaggedStore
+		Lock            func(name string, duration time.Duration, owner ...string) *cache.AtomicLock
 	}{
-		Get:       cache.Get,
-		GetString: cache.GetString,
-		Forget:    cache.Forget,
-		Flush:     cache.Flush,
+		Get:             cache.Get,
+		GetString:       cache.GetString,
+		GetInt:          cache.GetInt,
+		GetBool:         cache.GetBool,
+		Put:             cache.Put,
+		Add:             cache.Add,
+		Increment:       cache.Increment,
+		Decrement:       cache.Decrement,
+		Remember:        cache.Remember,
+		RememberForever: cache.RememberForever,
+		Pull:            cache.Pull,
+		Forget:          cache.Forget,
+		Flush:           cache.Flush,
+		Tags:            cache.Tags,
+		Lock:            cache.Lock,
 	}
 
 	// Queue provides access to background job dispatching

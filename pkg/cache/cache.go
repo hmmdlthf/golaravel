@@ -1,130 +1,98 @@
 package cache
 
 import (
-	"sync"
 	"time"
 )
 
-type cacheItem struct {
-	value     any
-	expiresAt time.Time
+// MemoryCache aliases MemoryStore for backward compatibility.
+type MemoryCache = MemoryStore
+
+// Global default cache store
+var defaultStore Store = NewMemoryStore()
+
+// SetDefaultStore configures the global cache store.
+func SetDefaultStore(s Store) {
+	defaultStore = s
 }
 
-func (ci *cacheItem) isExpired() bool {
-	if ci.expiresAt.IsZero() {
-		return false
-	}
-	return time.Now().After(ci.expiresAt)
+// DefaultStore returns the active global cache store.
+func DefaultStore() Store {
+	return defaultStore
 }
 
-// MemoryCache is an ultra-fast in-memory cache with TTL eviction.
-type MemoryCache struct {
-	mu    sync.RWMutex
-	items map[string]*cacheItem
-}
-
-// Global default cache
-var globalCache = NewMemoryCache()
-
-// NewMemoryCache creates a new in-memory cache.
-func NewMemoryCache() *MemoryCache {
-	c := &MemoryCache{
-		items: make(map[string]*cacheItem, 1024),
-	}
-	// Background eviction goroutine
-	go c.evictionLoop()
-	return c
-}
+// Global facade functions matching Laravel's Cache facade:
 
 // Put stores an item in the cache for the specified duration.
-func (c *MemoryCache) Put(key string, val any, ttl time.Duration) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func Put(key string, val any, ttl time.Duration) error {
+	return defaultStore.Put(key, val, ttl)
+}
 
-	var exp time.Time
-	if ttl > 0 {
-		exp = time.Now().Add(ttl)
-	}
-
-	c.items[key] = &cacheItem{
-		value:     val,
-		expiresAt: exp,
-	}
+// Add stores an item only if the key does not already exist.
+func Add(key string, val any, ttl time.Duration) (bool, error) {
+	return defaultStore.Add(key, val, ttl)
 }
 
 // Get retrieves an item from the cache.
-func (c *MemoryCache) Get(key string) (any, bool) {
-	c.mu.RLock()
-	item, found := c.items[key]
-	c.mu.RUnlock()
-
-	if !found || item.isExpired() {
-		return nil, false
-	}
-	return item.value, true
+func Get(key string) (any, bool) {
+	return defaultStore.Get(key)
 }
 
-// GetString retrieves a string value from the cache.
-func (c *MemoryCache) GetString(key string) string {
-	if val, ok := c.Get(key); ok {
-		if s, ok := val.(string); ok {
-			return s
-		}
-	}
-	return ""
+// GetString retrieves a string attribute.
+func GetString(key string, defaultVal ...string) string {
+	return defaultStore.GetString(key, defaultVal...)
+}
+
+// GetInt retrieves an integer attribute.
+func GetInt(key string, defaultVal ...int) int {
+	return defaultStore.GetInt(key, defaultVal...)
+}
+
+// GetBool retrieves a boolean attribute.
+func GetBool(key string, defaultVal ...bool) bool {
+	return defaultStore.GetBool(key, defaultVal...)
+}
+
+// Increment increases an integer value in the cache.
+func Increment(key string, value ...int64) (int64, error) {
+	return defaultStore.Increment(key, value...)
+}
+
+// Decrement decreases an integer value in the cache.
+func Decrement(key string, value ...int64) (int64, error) {
+	return defaultStore.Decrement(key, value...)
 }
 
 // Remember retrieves an item, or computes and caches it if missing.
-func (c *MemoryCache) Remember(key string, ttl time.Duration, fn func() (any, error)) (any, error) {
-	if val, ok := c.Get(key); ok {
-		return val, nil
-	}
+func Remember(key string, ttl time.Duration, fn func() (any, error)) (any, error) {
+	return defaultStore.Remember(key, ttl, fn)
+}
 
-	val, err := fn()
-	if err != nil {
-		return nil, err
-	}
+// RememberForever stores an item indefinitely.
+func RememberForever(key string, fn func() (any, error)) (any, error) {
+	return defaultStore.RememberForever(key, fn)
+}
 
-	c.Put(key, val, ttl)
-	return val, nil
+// Pull retrieves and removes an item from the cache.
+func Pull(key string, defaultVal ...any) any {
+	return defaultStore.Pull(key, defaultVal...)
 }
 
 // Forget removes an item from the cache.
-func (c *MemoryCache) Forget(key string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	delete(c.items, key)
+func Forget(key string) error {
+	return defaultStore.Forget(key)
 }
 
 // Flush clears all cache items.
-func (c *MemoryCache) Flush() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.items = make(map[string]*cacheItem, 1024)
+func Flush() error {
+	return defaultStore.Flush()
 }
 
-func (c *MemoryCache) evictionLoop() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		c.mu.Lock()
-		now := time.Now()
-		for k, v := range c.items {
-			if !v.expiresAt.IsZero() && now.After(v.expiresAt) {
-				delete(c.items, k)
-			}
-		}
-		c.mu.Unlock()
-	}
+// Tags returns a TaggedStore scoped to the specified tag names.
+func Tags(names ...string) *TaggedStore {
+	return defaultStore.Tags(names...)
 }
 
-// Global helpers
-func Put(key string, val any, ttl time.Duration)                          { globalCache.Put(key, val, ttl) }
-func Get(key string) (any, bool)                                          { return globalCache.Get(key) }
-func GetString(key string) string                                         { return globalCache.GetString(key) }
-func Remember(key string, ttl time.Duration, fn func() (any, error)) (any, error) {
-	return globalCache.Remember(key, ttl, fn)
+// Lock returns an atomic Lock instance.
+func Lock(name string, duration time.Duration, owner ...string) *AtomicLock {
+	return defaultStore.Lock(name, duration, owner...)
 }
-func Forget(key string) { globalCache.Forget(key) }
-func Flush()            { globalCache.Flush() }
