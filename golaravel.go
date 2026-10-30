@@ -43,6 +43,31 @@ func Default() *Engine {
 	return golaravel.Default()
 }
 
+// BindModel registers an explicit model binder with compile-time type T.
+func BindModel[T any](app *Engine, param string, fn func(ctx stdContext.Context, val string) (T, error)) {
+	router.BindModel(app.Router, param, fn)
+}
+
+// BindFieldModel registers an explicit model binder for a custom field/predicate.
+func BindFieldModel[T any](app *Engine, param, field string, fn func(ctx stdContext.Context, val string) (T, error)) {
+	router.BindFieldModel(app.Router, param, field, fn)
+}
+
+// BindScopedModel registers a child model binder scoped to a parent entity.
+func BindScopedModel[TChild any, TParent any](app *Engine, childParam, parentParam string, fn func(ctx stdContext.Context, val string, parent TParent) (TChild, error)) {
+	router.BindScopedModel(app.Router, childParam, parentParam, fn)
+}
+
+// With wraps a handler that receives one resolved model.
+func With[T any](param string, handler func(c *context.Context, model T) error) context.HandlerFunc {
+	return router.With(param, handler)
+}
+
+// With2 wraps a handler that receives two resolved models (e.g. parent and child).
+func With2[T1 any, T2 any](p1, p2 string, handler func(c *context.Context, m1 T1, m2 T2) error) context.HandlerFunc {
+	return router.With2(p1, p2, handler)
+}
+
 // Facade shortcuts for rapid developer ergonomics
 var (
 	// Config provides access to environment and application settings

@@ -240,6 +240,37 @@ func (c *Context) Get(key string) (any, bool) {
 	return val, ok
 }
 
+// SetModel stores a resolved route model in the request context.
+func (c *Context) SetModel(name string, model any) {
+	c.Set("__model:"+name, model)
+}
+
+// Model retrieves a resolved route model from the request context.
+func (c *Context) Model(name string) any {
+	val, _ := c.Get("__model:" + name)
+	return val
+}
+
+// GetModel retrieves a strongly-typed resolved route model from the request context.
+func GetModel[T any](c *Context, name string) (T, bool) {
+	val, ok := c.Get("__model:" + name)
+	if !ok || val == nil {
+		var zero T
+		return zero, false
+	}
+	typed, ok := val.(T)
+	return typed, ok
+}
+
+// MustGetModel retrieves a strongly-typed resolved route model from the request context or panics.
+func MustGetModel[T any](c *Context, name string) T {
+	m, ok := GetModel[T](c, name)
+	if !ok {
+		panic(fmt.Sprintf("context: model [%s] not found in request context", name))
+	}
+	return m
+}
+
 // BindJSON deserializes the JSON request body into the provided struct pointer
 // using ultra-fast zero-reflection parsing (goccy/go-json).
 func (c *Context) BindJSON(obj any) error {

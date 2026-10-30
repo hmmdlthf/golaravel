@@ -33,18 +33,25 @@ func (r *Route) GetName() string {
 
 // Router is an ultra-high performance Radix-tree HTTP router.
 type Router struct {
-	trees        map[string]*node
-	namedRoutes  map[string]*Route
-	middlewares  []context.HandlerFunc
-	NotFound     context.HandlerFunc
-	routesList   []*Route
+	trees                map[string]*node
+	namedRoutes          map[string]*Route
+	middlewares          []context.HandlerFunc
+	NotFound             context.HandlerFunc
+	routesList           []*Route
+	modelBinders         map[string]ModelBinder
+	fieldBinders         map[string]ModelBinder
+	scopedBinders        map[string]ScopedModelBinder
+	modelNotFoundHandler context.HandlerFunc
 }
 
 // New creates a new Router instance.
 func New() *Router {
 	return &Router{
-		trees:       make(map[string]*node),
-		namedRoutes: make(map[string]*Route),
+		trees:         make(map[string]*node),
+		namedRoutes:   make(map[string]*Route),
+		modelBinders:  make(map[string]ModelBinder),
+		fieldBinders:  make(map[string]ModelBinder),
+		scopedBinders: make(map[string]ScopedModelBinder),
 		NotFound: func(c *context.Context) error {
 			return c.String(http.StatusNotFound, "404 Not Found")
 		},
@@ -65,12 +72,20 @@ func (r *Router) Handle(method, path string, handlers ...context.HandlerFunc) *R
 		panic("there must be at least one handler")
 	}
 
-	// Normalize curly braces {id} to :id for Laravel parity
-	path = normalizePath(path)
+	// Parse route model bindings (e.g. {invoice:token} or {user}) and normalize to :param
+	normalizedPath, bindings := parseBindings(path)
+	path = normalizedPath
 
-	// Combine router middlewares with route handlers
-	combinedHandlers := make([]context.HandlerFunc, 0, len(r.middlewares)+len(handlers))
+	// Auto-attach model binding interceptor middleware if path contains bindings
+	var routeMiddlewares []context.HandlerFunc
+	if len(bindings) > 0 {
+		routeMiddlewares = append(routeMiddlewares, r.createModelBindingMiddleware(bindings))
+	}
+
+	// Combine router middlewares with route middlewares and handlers
+	combinedHandlers := make([]context.HandlerFunc, 0, len(r.middlewares)+len(routeMiddlewares)+len(handlers))
 	combinedHandlers = append(combinedHandlers, r.middlewares...)
+	combinedHandlers = append(combinedHandlers, routeMiddlewares...)
 	combinedHandlers = append(combinedHandlers, handlers...)
 
 	root := r.trees[method]

@@ -14,13 +14,17 @@ import (
 
 	"github.com/golaravel/golaravel/example/app"
 	"github.com/golaravel/golaravel/example/app/handlers"
+	"github.com/golaravel/golaravel/example/app/invoice"
+	"github.com/golaravel/golaravel/example/app/views"
 	"github.com/golaravel/golaravel/pkg/auth"
 	"github.com/golaravel/golaravel/pkg/broadcast"
 	"github.com/golaravel/golaravel/pkg/container"
+	gcontext "github.com/golaravel/golaravel/pkg/context"
 	"github.com/golaravel/golaravel/pkg/flutter"
 	"github.com/golaravel/golaravel/pkg/golaravel"
 	"github.com/golaravel/golaravel/pkg/hash"
 	"github.com/golaravel/golaravel/pkg/middleware"
+	"github.com/golaravel/golaravel/pkg/router"
 )
 
 func setupTestApp(t *testing.T) (*golaravel.Engine, *app.Client, string) {
@@ -80,7 +84,17 @@ func setupTestApp(t *testing.T) (*golaravel.Engine, *app.Client, string) {
 	handlers.RegisterInvoiceController(engine.Container, jwt)
 	ctrl := container.MustResolve[*handlers.InvoiceController](engine.Container)
 
-	engine.GET("/invoice/:token", ctrl.PublicShow)
+	// Register Route Model Binder
+	router.BindFieldModel[*app.Invoice](engine.Router, "invoice", "token", func(ctx context.Context, token string) (*app.Invoice, error) {
+		return client.Invoice.Query().
+			Where(invoice.TokenEQ(token)).
+			WithItems().
+			Only(ctx)
+	})
+
+	engine.GET("/invoice/{invoice:token}", router.With[*app.Invoice]("invoice", func(c *gcontext.Context, inv *app.Invoice) error {
+		return c.Templ(http.StatusOK, views.PublicInvoiceView(inv))
+	}))
 	api := engine.Group("/api")
 	api.POST("/auth/login", ctrl.ApiLogin)
 	api.GET("/invoices", ctrl.ApiList)
@@ -113,6 +127,14 @@ func TestShowcase_E2E(t *testing.T) {
 	body1 := w1.Body.String()
 	if !strings.Contains(body1, "Test Customer Corp") || !strings.Contains(body1, "INV-TEST-001") {
 		t.Fatalf("expected invoice content in HTML body: %s", body1)
+	}
+
+	// 1b. Test Route Model Binding 404 on invalid token
+	w1b := httptest.NewRecorder()
+	req1b := httptest.NewRequest("GET", "/invoice/non-existent-token", nil)
+	engine.ServeHTTP(w1b, req1b)
+	if w1b.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for invalid token route model binding, got %d", w1b.Code)
 	}
 
 	// 2. Test Login API

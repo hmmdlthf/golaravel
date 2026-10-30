@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
 	"time"
 
@@ -11,6 +13,8 @@ import (
 
 	"github.com/golaravel/golaravel/example/app"
 	"github.com/golaravel/golaravel/example/app/handlers"
+	"github.com/golaravel/golaravel/example/app/invoice"
+	"github.com/golaravel/golaravel/example/app/views"
 	"github.com/golaravel/golaravel/example/database/seeders"
 	"github.com/golaravel/golaravel/pkg/artisan"
 	"github.com/golaravel/golaravel/pkg/auth"
@@ -21,6 +25,7 @@ import (
 	"github.com/golaravel/golaravel/pkg/flutter"
 	"github.com/golaravel/golaravel/pkg/golaravel"
 	"github.com/golaravel/golaravel/pkg/middleware"
+	"github.com/golaravel/golaravel/pkg/router"
 )
 
 func main() {
@@ -68,12 +73,35 @@ func main() {
 	handlers.RegisterInvoiceController(appEngine.Container, jwtManager)
 	invoiceCtrl := container.MustResolve[*handlers.InvoiceController](appEngine.Container)
 
-	// 6. Routes Setup
+	// 6. Route Model Binding (PRD §3.1)
+	// Bind "invoice" parameter by unique token predicate
+	router.BindFieldModel[*app.Invoice](appEngine.Router, "invoice", "token", func(ctx context.Context, token string) (*app.Invoice, error) {
+		return client.Invoice.Query().
+			Where(invoice.TokenEQ(token)).
+			WithItems().
+			Only(ctx)
+	})
 
-	// === FAST-PATH MICRO-SSR (TEMPL) ===
+	// Bind "invoice" parameter by integer primary key
+	router.BindModel[*app.Invoice](appEngine.Router, "invoice", func(ctx context.Context, idStr string) (*app.Invoice, error) {
+		var id int
+		if _, err := fmt.Sscanf(idStr, "%d", &id); err != nil {
+			return nil, err
+		}
+		return client.Invoice.Query().
+			Where(invoice.IDEQ(id)).
+			WithItems().
+			Only(ctx)
+	})
+
+	// 7. Routes Setup
+
+	// === FAST-PATH MICRO-SSR (TEMPL) VIA ROUTE MODEL BINDING ===
 	// Public invoice link opened by customers from email/SMS:
-	// Rendered in < 45 nanoseconds! Zero client JS overhead.
-	appEngine.GET("/invoice/:token", invoiceCtrl.PublicShow).Name("invoices.public")
+	// Automatically resolves *app.Invoice by token parameter, rendering in < 45 nanoseconds!
+	appEngine.GET("/invoice/{invoice:token}", router.With[*app.Invoice]("invoice", func(c *gcontext.Context, inv *app.Invoice) error {
+		return c.Templ(http.StatusOK, views.PublicInvoiceView(inv))
+	})).Name("invoices.public")
 
 	// === HIGH-SPEED JSON REST API (FOR FLUTTER MULTIPLATFORM CLIENT) ===
 	api := appEngine.Group("/api")
