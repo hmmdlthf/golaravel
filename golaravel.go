@@ -34,7 +34,7 @@ import (
 )
 
 // Version is the current version of the GoLaravel framework.
-const Version = "v1.0.0"
+const Version = "v1.0.1"
 
 // Re-export core types for top-level framework ergonomics
 type (

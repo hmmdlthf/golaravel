@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.0.1] - 2026-10-31
+
+### Fixed
+- **Zero-Allocation Radix Router (`pkg/router`)**:
+  - Prioritize static route matching over wildcard parameter children on shared path prefixes (e.g. `/users/create`, `/users/bulk`, `/users/export` alongside `/users/:id`).
+  - Support seamless coexistence of static sibling routes and wildcard parameter nodes within radix tree nodes without route conflicts or panics.
+
+---
+
 ## [v1.0.0] - 2026-10-30
 
 ### Initial Production Release 🎉
