@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/a-h/templ"
@@ -230,6 +231,27 @@ func (c *Context) DefaultQuery(key, defaultValue string) string {
 // Header returns the value of a request header.
 func (c *Context) Header(key string) string {
 	return c.Request.Header.Get(key)
+}
+
+// ClientIP returns the client's network address, inspecting X-Forwarded-For and X-Real-IP before RemoteAddr.
+func (c *Context) ClientIP() string {
+	if xff := c.Request.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 {
+			ip := strings.TrimSpace(parts[0])
+			if ip != "" {
+				return ip
+			}
+		}
+	}
+	if xri := c.Request.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+	ip := c.Request.RemoteAddr
+	if colon := strings.LastIndex(ip, ":"); colon != -1 {
+		ip = ip[:colon]
+	}
+	return ip
 }
 
 // Cookie retrieves the named cookie from the HTTP request.

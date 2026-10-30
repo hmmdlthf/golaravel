@@ -22,6 +22,7 @@ import (
 	"github.com/golaravel/golaravel/pkg/notification"
 	"github.com/golaravel/golaravel/pkg/privacy"
 	"github.com/golaravel/golaravel/pkg/queue"
+	"github.com/golaravel/golaravel/pkg/ratelimit"
 	"github.com/golaravel/golaravel/pkg/router"
 	"github.com/golaravel/golaravel/pkg/schedule"
 	"github.com/golaravel/golaravel/pkg/session"
@@ -53,6 +54,8 @@ type (
 	HTTPResponse    = glhttp.Response
 	HTTPRequest     = glhttp.Request
 	HTTPClient      = glhttp.Client
+	Limit           = ratelimit.Limit
+	RateLimitResult = ratelimit.Result
 )
 
 // Test creates a high-performance HTTP test harness client directly against any http.Handler or GoLaravel Engine.
@@ -279,6 +282,43 @@ var (
 		Start:     schedule.Start,
 		Stop:      schedule.Stop,
 		Scheduler: schedule.DefaultScheduler,
+	}
+
+	// RateLimit provides access to sliding-window rate limiting & throttling
+	RateLimit = struct {
+		For         func(name string, resolver any)
+		Throttle    func(name string) context.HandlerFunc
+		ThrottleMax func(maxAttempts int, window time.Duration, keyResolver ...func(c *context.Context) string) context.HandlerFunc
+		PerSecond   func(max int) *ratelimit.Limit
+		PerMinute   func(max int) *ratelimit.Limit
+		PerHour     func(max int) *ratelimit.Limit
+		PerDay      func(max int) *ratelimit.Limit
+		None        func() *ratelimit.Limit
+		Attempt     func(key string, maxAttempts int, window time.Duration, fn func() error) error
+		Remaining   func(key string, maxAttempts int, window time.Duration) int
+		AvailableIn func(key string, maxAttempts int, window time.Duration) time.Duration
+		Hit         func(key string, maxAttempts int, window time.Duration) (ratelimit.Result, error)
+		Reset       func(key string) error
+		Clear       func() error
+		SetStore    func(s ratelimit.Store)
+		GetStore    func() ratelimit.Store
+	}{
+		For:         ratelimit.For,
+		Throttle:    ratelimit.Throttle,
+		ThrottleMax: ratelimit.ThrottleMax,
+		PerSecond:   ratelimit.PerSecond,
+		PerMinute:   ratelimit.PerMinute,
+		PerHour:     ratelimit.PerHour,
+		PerDay:      ratelimit.PerDay,
+		None:        ratelimit.None,
+		Attempt:     ratelimit.Attempt,
+		Remaining:   ratelimit.Remaining,
+		AvailableIn: ratelimit.AvailableIn,
+		Hit:         ratelimit.Hit,
+		Reset:       ratelimit.Reset,
+		Clear:       ratelimit.Clear,
+		SetStore:    ratelimit.SetStore,
+		GetStore:    ratelimit.GetStore,
 	}
 
 	// Auth provides access to authentication helpers

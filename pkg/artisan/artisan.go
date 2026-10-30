@@ -114,6 +114,12 @@ func (r *Registry) registerDefaults() {
 	})
 
 	r.Register(&Command{
+		Name:        "make:limiter",
+		Description: "Create a new named rate limiter (app/limiters/<name>_limiter.go)",
+		Run:         makeLimiter,
+	})
+
+	r.Register(&Command{
 		Name:        "make:job",
 		Description: "Create a new async background job (app/jobs/<name>.go)",
 		Run:         makeJob,
@@ -1070,6 +1076,56 @@ func %s() context.HandlerFunc {
 	}
 
 	fmt.Printf("\033[32mINFO\033[0m Middleware [%s] created successfully.\n", targetPath)
+	return nil
+}
+
+func makeLimiter(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("missing limiter name. Usage: artisan make:limiter <Name>")
+	}
+	name := strings.Title(args[0])
+	if strings.HasSuffix(name, "Limiter") {
+		name = strings.TrimSuffix(name, "Limiter")
+	}
+
+	filename := strings.ToLower(name) + "_limiter.go"
+	dir := filepath.Join("app", "limiters")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	targetPath := filepath.Join(dir, filename)
+
+	slug := strings.ToLower(name)
+	content := fmt.Sprintf(`package limiters
+
+import (
+	"github.com/golaravel/golaravel/pkg/auth"
+	"github.com/golaravel/golaravel/pkg/context"
+	"github.com/golaravel/golaravel/pkg/ratelimit"
+)
+
+// Register%sLimiter registers the "%s" named sliding-window rate limiter.
+func Register%sLimiter() {
+	ratelimit.For("%s", func(c *context.Context) *ratelimit.Limit {
+		user := auth.User(c)
+
+		// Tiered Throttling Strategy
+		if user != nil {
+			// Authenticated users get higher throughput based on their identifier
+			return ratelimit.PerMinute(120).By(user.GetAuthIdentifier())
+		}
+
+		// Anonymous / Guest clients are throttled per IP address
+		return ratelimit.PerMinute(30).By(c.ClientIP())
+	})
+}
+`, name, slug, name, slug)
+
+	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+		return err
+	}
+
+	fmt.Printf("\033[32mINFO\033[0m Rate Limiter [%s] created successfully.\n", targetPath)
 	return nil
 }
 

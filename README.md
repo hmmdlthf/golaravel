@@ -70,6 +70,7 @@ golaravel/
 │   ├── database/           # High-concurrency connection pools, Atlas migrations & Seeders
 │   ├── http/               # Fluent outbound HTTP client & mocking engine (Http::fake)
 │   ├── testing/            # Full-stack HTTP testing harness & assertion toolkit
+│   ├── ratelimit/          # Sliding-window rate limiter & tiered throttling middleware
 │   ├── telemetry/          # Prometheus metrics, OpenTelemetry W3C distributed tracing & health checks
 │   └── artisan/            # Artisan command registry & generators
 ├── example/                # Full reference app (Ent ORM + Templ + Flutter Hybrid)
@@ -138,6 +139,7 @@ artisan make:policy Post    # Create authorization policy
 artisan make:scope Active   # Create global Ent query scope
 artisan make:view posts     # Create Templ view
 artisan make:middleware Auth# Create middleware
+artisan make:limiter API    # Create named sliding-window rate limiter
 
 # Server, Workers & Scheduler
 artisan serve               # Start HTTP development server

@@ -244,3 +244,37 @@ func TestMakeMail_Scaffolding(t *testing.T) {
 		t.Errorf("templ view missing templ InvoiceEmail declaration")
 	}
 }
+
+func TestMakeLimiter_Scaffolding(t *testing.T) {
+	reg := NewRegistry()
+	if _, ok := reg.commands["make:limiter"]; !ok {
+		t.Fatal("expected make:limiter to be registered in artisan registry")
+	}
+
+	// Missing name
+	if err := makeLimiter(nil); err == nil {
+		t.Fatal("expected error on missing limiter name")
+	}
+
+	// Scaffold API limiter
+	targetFile := "app/limiters/api_limiter.go"
+	_ = os.Remove(targetFile)
+	defer os.Remove(targetFile)
+
+	if err := makeLimiter([]string{"Api"}); err != nil {
+		t.Fatalf("makeLimiter failed: %v", err)
+	}
+
+	content, err := os.ReadFile(targetFile)
+	if err != nil {
+		t.Fatalf("failed to read created limiter file: %v", err)
+	}
+
+	str := string(content)
+	if !strings.Contains(str, `ratelimit.For("api"`) {
+		t.Errorf("limiter file missing ratelimit.For(\"api\") registration")
+	}
+	if !strings.Contains(str, "ratelimit.PerMinute(120)") {
+		t.Errorf("limiter file missing tiered throughput rule")
+	}
+}

@@ -60,6 +60,7 @@ All generators place files in deterministic directories:
 | `artisan make:policy <Name>` | `app/policies/<name>_policy.go` | Creates an authorization policy |
 | `artisan make:scope <Name>` | `app/scopes/<name>_scope.go` | Creates a global Ent query scope |
 | `artisan make:middleware <Name>`| `app/middleware/<name>.go` | Creates custom HTTP middleware |
+| `artisan make:limiter <Name>`   | `app/limiters/<name>_limiter.go` | Creates a named sliding-window rate limiter |
 | `artisan make:migration <Name>`| `database/migrations/<timestamp>_<name>.sql` | Creates a new Atlas versioned migration |
 | `artisan make:seeder <Name>`   | `database/seeders/<name>_seeder.go` | Creates a new database seeder class |
 
