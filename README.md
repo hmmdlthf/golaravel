@@ -61,7 +61,7 @@ golaravel/
 │   ├── events/             # Synchronous & asynchronous event dispatcher
 │   ├── cache/              # Tagged cache engine, atomic locks, Memory & Redis with TTL
 │   ├── storage/            # Multi-disk cloud filesystem (S3, MinIO, Local, SigV4 Presigned URLs)
-│   ├── mail/               # Fluent email builder (LogDriver, SMTP)
+│   ├── mail/               # Advanced Mailables, Templ view templates, async queueing & Preview Studio
 │   ├── broadcast/          # Realtime WebSockets & SSE broadcasting with Ent hooks
 │   ├── notification/       # Multi-channel notifications (Mail, DB, Broadcast, Slack, SMS)
 │   ├── privacy/            # Multi-tenancy isolation scopes, soft deletes, and mixins
@@ -133,7 +133,7 @@ artisan make:auth            # Scaffold turnkey auth & TOTP 2FA controller
 artisan make:oauth GitHub    # Scaffold OAuth2 social auth controller
 artisan make:job SendMail   # Create async background job
 artisan make:notification InvoicePaid # Create multi-channel notification
-artisan make:mail Welcome   # Create mailable email
+artisan make:mail Welcome [--view] # Create mailable with optional Templ view
 artisan make:policy Post    # Create authorization policy
 artisan make:scope Active   # Create global Ent query scope
 artisan make:view posts     # Create Templ view

@@ -191,3 +191,56 @@ func TestScheduleCommands(t *testing.T) {
 	// 5. Clean scheduler after test
 	schedule.Clear()
 }
+
+func TestMakeMail_Scaffolding(t *testing.T) {
+	// 1. Missing name error
+	if err := makeMail(nil); err == nil {
+		t.Fatal("expected error on missing mail name")
+	}
+
+	// 2. Standard Mailable
+	mailFile := "app/mail/welcome_mail.go"
+	_ = os.Remove(mailFile)
+	defer os.Remove(mailFile)
+
+	if err := makeMail([]string{"Welcome"}); err != nil {
+		t.Fatalf("makeMail failed: %v", err)
+	}
+
+	content, err := os.ReadFile(mailFile)
+	if err != nil {
+		t.Fatalf("failed to read generated mail file: %v", err)
+	}
+	strContent := string(content)
+	if !strings.Contains(strContent, "type WelcomeMail struct") {
+		t.Errorf("mail file missing WelcomeMail struct")
+	}
+	if !strings.Contains(strContent, "func (m *WelcomeMail) Build(ctx context.Context) (*mail.Message, error)") {
+		t.Errorf("mail file missing Mailable Build method")
+	}
+
+	// 3. Mailable with Templ View (--view)
+	invoiceMail := "app/mail/invoice_mail.go"
+	invoiceView := "app/views/mail/invoice.templ"
+	_ = os.Remove(invoiceMail)
+	_ = os.Remove(invoiceView)
+	defer os.Remove(invoiceMail)
+	defer os.Remove(invoiceView)
+
+	if err := makeMail([]string{"Invoice", "--view"}); err != nil {
+		t.Fatalf("makeMail with --view failed: %v", err)
+	}
+
+	mailBytes, _ := os.ReadFile(invoiceMail)
+	if !strings.Contains(string(mailBytes), "View(ctx, mailviews.InvoiceEmail(m.Name))") {
+		t.Errorf("mail with --view missing View(...) call")
+	}
+
+	viewBytes, err := os.ReadFile(invoiceView)
+	if err != nil {
+		t.Fatalf("failed to read generated templ view: %v", err)
+	}
+	if !strings.Contains(string(viewBytes), "templ InvoiceEmail(name string)") {
+		t.Errorf("templ view missing templ InvoiceEmail declaration")
+	}
+}

@@ -99,49 +99,58 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
     - Live Ent Model Mutation Hooks (`EntMutationHook`)
     - Flutter and Browser Native Client Subscriptions
 
-15. **[Multi-Channel Notifications Engine (PRD §7)](./notifications.md)**
+15. **[Advanced Mailables, Templ View Templates & Preview Studio (PRD §7)](./mail-and-preview-studio.md)**
+    - Fluent Mailable Architecture (`mail.Mailable`, `mail.PendingMail`)
+    - Type-Safe Templ Email Templates (`msg.View(ctx, component)`)
+    - Asynchronous Queued & Delayed Email Delivery (`mail.Queue`, `mail.Later`)
+    - RFC 2045/2046 MIME Compiler with File & In-Memory Attachments
+    - Interactive Mail Preview Studio Web UI (`/mail/preview`, responsive simulator, isolated iframe)
+    - Test Assertions & Mocking (`mail.Fake()`, `mail.AssertSent`, `mail.AssertSentCount`)
+    - Artisan Mailable Generator (`artisan make:mail <Name> [--view]`)
+
+16. **[Multi-Channel Notifications Engine (PRD §7)](./notifications.md)**
     - Unified Notification Delivery (Email, In-App Database, Broadcast, Slack, SMS)
     - Notifiable Recipients & On-Demand Routing
     - Asynchronous Queued Notifications (`ShouldQueue`)
     - Generator Command (`artisan make:notification`)
 
-16. **[Tagged Cache Engine & Atomic Locks (PRD §7)](./tagged-cache-and-locks.md)**
+17. **[Tagged Cache Engine & Atomic Locks (PRD §7)](./tagged-cache-and-locks.md)**
     - O(1) Tagged Cache Invalidation (`Cache.Tags(...)`)
     - Distributed & In-Process Atomic Locks (`Cache.Lock(...)`)
     - Automatic Lock Expiration & Auto-Release (`Lock.Get`, `Lock.Block`)
 
-17. **[Cloud Filesystem & Presigned URLs (PRD §7)](./cloud-storage-and-s3.md)**
+18. **[Cloud Filesystem & Presigned URLs (PRD §7)](./cloud-storage-and-s3.md)**
     - Multi-Disk Registry (`local`, `public`, `s3`, `minio`)
     - Zero-External-SDK AWS Signature Version 4 (SigV4) Engine
     - Time-Limited Presigned URLs (`TemporaryURL`, `PresignedPutURL`)
     - Direct Client Uploads & Multipart Form Helpers (`c.FormFile`, `c.SaveUploadedFile`)
 
-18. **[HTTP Testing Harness & Assertion Toolkit (PRD §5)](./testing.md)**
+19. **[HTTP Testing Harness & Assertion Toolkit (PRD §5)](./testing.md)**
     - Zero-Network Direct In-Memory Pipeline Execution (`app.Test(t)`)
     - Fluent Request Builder (`WithToken`, `WithJSON`, `WithForm`, `WithFile`)
     - Deep JSON Path, Predicate, and Error Bag Assertions
     - HTML & View Assertions (`AssertSee`, `AssertDontSee`, `AssertSeeInOrder`)
 
-19. **[Fluent HTTP Client & Mocking Engine (PRD §7)](./fluent-http-client.md)**
+20. **[Fluent HTTP Client & Mocking Engine (PRD §7)](./fluent-http-client.md)**
     - Expressive Request Chaining (`WithToken`, `WithHeaders`, `Timeout`, `Retry`)
     - Automatic JSON, Form, and Multipart File (`Attach`) Uploads
     - Comprehensive Mocking Engine (`Http.Fake()`, Sequences, Wildcards)
     - Test Assertions (`AssertSent`, `AssertSentCount`, `AssertNothingSent`)
 
-20. **[Prometheus, OpenTelemetry & Health Check Engine (PRD §9)](./telemetry-and-health-checks.md)**
+21. **[Prometheus, OpenTelemetry & Health Check Engine (PRD §9)](./telemetry-and-health-checks.md)**
     - Prometheus Metrics Exposition (`/metrics`) with Go Runtime Statistics
     - OpenTelemetry Distributed Tracing & W3C Trace Context Propagation (`traceparent`)
     - Multi-Subsystem Health Probes (`/health`, `/livez`, `/readyz`)
     - HTTP Observability Middlewares (`MetricsMiddleware`, `TraceMiddleware`)
     - Terminal Health Dashboard (`artisan health`)
 
-21. **[Artisan CLI Reference](./artisan-cli.md)**
+22. **[Artisan CLI Reference](./artisan-cli.md)**
     - Project Creation (`artisan new`)
     - Full-Stack CRUD Scaffolder (`artisan make:crud <Name>`) (PRD §8.2)
     - Database Migrations & Seeding (`migrate`, `migrate:diff`, `db:seed`, etc.)
     - Generator Commands (`make:crud`, `make:schema`, `make:controller`, `make:job`, `make:notification`, `make:scope`, etc.)
     - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`, `health`)
 
-22. **[Performance & Benchmarks](./benchmarks.md)**
+23. **[Performance & Benchmarks](./benchmarks.md)**
     - Zero-Allocation Architecture Methodology
     - Micro-benchmark Results vs Gin, Fiber, and Laravel Octane

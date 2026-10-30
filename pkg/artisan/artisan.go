@@ -312,30 +312,114 @@ func (j *%s) Handle(ctx context.Context) error {
 
 func makeMail(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("missing mail name. Usage: artisan make:mail <Name>")
+		return fmt.Errorf("missing mail name. Usage: artisan make:mail <Name> [--view]")
 	}
-	name := strings.Title(args[0])
-	filename := strings.ToLower(name) + ".go"
+	rawName := args[0]
+	hasView := false
+	for _, arg := range args[1:] {
+		if arg == "--view" {
+			hasView = true
+		}
+	}
+
+	name := strings.Title(rawName)
+	if strings.HasSuffix(name, "Mail") {
+		name = strings.TrimSuffix(name, "Mail")
+	}
+
+	filename := strings.ToLower(name) + "_mail.go"
 	dir := filepath.Join("app", "mail")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
 	targetPath := filepath.Join(dir, filename)
 
-	content := fmt.Sprintf(`package mail
+	var content string
+	if hasView {
+		viewDir := filepath.Join("app", "views", "mail")
+		_ = os.MkdirAll(viewDir, 0755)
+		viewPath := filepath.Join(viewDir, strings.ToLower(name)+".templ")
+
+		viewContent := fmt.Sprintf(`package mailviews
+
+templ %sEmail(name string) {
+	<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px;">
+		<h1 style="color: #0f172a; font-size: 20px; font-weight: 700; margin-bottom: 16px;">Hello { name }!</h1>
+		<p style="color: #475569; font-size: 15px; line-height: 1.6;">Thank you for using GoLaravel.</p>
+		<div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 13px; color: #94a3b8;">
+			&copy; GoLaravel Framework. All rights reserved.
+		</div>
+	</div>
+}
+`, name)
+		_ = os.WriteFile(viewPath, []byte(viewContent), 0644)
+		fmt.Printf("\033[32mINFO\033[0m Mail View [%s] created successfully.\n", viewPath)
+
+		content = fmt.Sprintf(`package mail
 
 import (
+	"context"
+
+	"github.com/golaravel/golaravel/app/views/mailviews"
 	"github.com/golaravel/golaravel/pkg/mail"
 )
 
-// Build%s creates a configured email message.
-func Build%s(recipient, name string) *mail.Message {
-	return mail.NewMessage().
-		To(recipient).
-		Subject("%s").
-		HTML("<h1>Hello " + name + "!</h1><p>Thank you for using GoLaravel.</p>")
+// %sMail represents the transactional email for %s.
+type %sMail struct {
+	Recipient string
+	Name      string
 }
-`, name, name, name)
+
+// New%sMail initializes the mailable.
+func New%sMail(recipient, name string) *%sMail {
+	return &%sMail{
+		Recipient: recipient,
+		Name:      name,
+	}
+}
+
+// Build compiles the message using the Templ view component.
+func (m *%sMail) Build(ctx context.Context) (*mail.Message, error) {
+	return mail.NewMessage().
+		To(m.Recipient).
+		Subject("%s").
+		View(ctx, mailviews.%sEmail(m.Name)).
+		Text("Hello " + m.Name + "!\nThank you for using GoLaravel."), nil
+}
+`, name, name, name, name, name, name, name, name, name, name)
+	} else {
+		content = fmt.Sprintf(`package mail
+
+import (
+	"context"
+
+	"github.com/golaravel/golaravel/pkg/mail"
+)
+
+// %sMail represents the transactional email for %s.
+type %sMail struct {
+	Recipient string
+	Name      string
+}
+
+// New%sMail initializes the mailable.
+func New%sMail(recipient, name string) *%sMail {
+	return &%sMail{
+		Recipient: recipient,
+		Name:      name,
+	}
+}
+
+// Build compiles the email message.
+func (m *%sMail) Build(ctx context.Context) (*mail.Message, error) {
+	return mail.NewMessage().
+		To(m.Recipient).
+		Subject("%s").
+		HTML("<h1>Hello " + m.Name + "!</h1><p>Thank you for using GoLaravel.</p>").
+		Text("Hello " + m.Name + "!\nThank you for using GoLaravel."), nil
+}
+`, name, name, name, name, name, name, name, name, name)
+	}
 
 	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
 		return err

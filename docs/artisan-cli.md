@@ -56,7 +56,7 @@ All generators place files in deterministic directories:
 | `artisan make:job <Name>` | `app/jobs/<name>_job.go` | Creates an async background queue job |
 | `artisan make:notification <Name>` | `app/notifications/<name>_notification.go` | Creates a multi-channel notification class |
 | `artisan make:auth` | `app/handlers/auth_workflow_controller.go` | Scaffolds turnkey auth workflows & TOTP 2FA controller |
-| `artisan make:mail <Name>` | `app/mail/<name>.go` | Creates a fluent Mailable email class |
+| `artisan make:mail <Name> [--view]` | `app/mail/<name>_mail.go` | Creates a Mailable struct with optional companion Templ view |
 | `artisan make:policy <Name>` | `app/policies/<name>_policy.go` | Creates an authorization policy |
 | `artisan make:scope <Name>` | `app/scopes/<name>_scope.go` | Creates a global Ent query scope |
 | `artisan make:middleware <Name>`| `app/middleware/<name>.go` | Creates custom HTTP middleware |

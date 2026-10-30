@@ -218,13 +218,33 @@ var (
 		SaveUploadedFile: storage.SaveUploadedFile,
 	}
 
-	// Mail provides access to email sending
+	// Mail provides access to advanced email sending, mailable builders, and preview studio
 	Mail = struct {
-		NewMessage func() *mail.Message
-		Send       func(msg *mail.Message) error
+		NewMessage         func() *mail.Message
+		Send               func(msg *mail.Message) error
+		To                 func(recipients ...string) *mail.PendingMail
+		Cc                 func(recipients ...string) *mail.PendingMail
+		Bcc                func(recipients ...string) *mail.PendingMail
+		SendMailable       func(ctx stdContext.Context, mailable mail.Mailable) error
+		Queue              func(ctx stdContext.Context, mailable mail.Mailable) error
+		Later              func(ctx stdContext.Context, delay time.Duration, mailable mail.Mailable) error
+		Fake               func() *mail.MemoryDriver
+		Restore            func()
+		RegisterPreview    func(name string, target any)
+		MountPreviewStudio func(r router.RouteRegistrar, prefix ...string)
 	}{
-		NewMessage: mail.NewMessage,
-		Send:       mail.Send,
+		NewMessage:         mail.NewMessage,
+		Send:               mail.Send,
+		To:                 mail.To,
+		Cc:                 mail.Cc,
+		Bcc:                mail.Bcc,
+		SendMailable:       mail.SendMailable,
+		Queue:              mail.Queue,
+		Later:              mail.Later,
+		Fake:               mail.Fake,
+		Restore:            mail.Restore,
+		RegisterPreview:    mail.RegisterPreview,
+		MountPreviewStudio: mail.MountPreviewStudio,
 	}
 
 	// Hash provides access to password hashing
