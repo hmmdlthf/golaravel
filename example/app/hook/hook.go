@@ -9,6 +9,30 @@ import (
 	"github.com/golaravel/golaravel/example/app"
 )
 
+// The InvoiceFunc type is an adapter to allow the use of ordinary
+// function as Invoice mutator.
+type InvoiceFunc func(context.Context, *app.InvoiceMutation) (app.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f InvoiceFunc) Mutate(ctx context.Context, m app.Mutation) (app.Value, error) {
+	if mv, ok := m.(*app.InvoiceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *app.InvoiceMutation", m)
+}
+
+// The LineItemFunc type is an adapter to allow the use of ordinary
+// function as LineItem mutator.
+type LineItemFunc func(context.Context, *app.LineItemMutation) (app.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f LineItemFunc) Mutate(ctx context.Context, m app.Mutation) (app.Value, error) {
+	if mv, ok := m.(*app.LineItemMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *app.LineItemMutation", m)
+}
+
 // The UserFunc type is an adapter to allow the use of ordinary
 // function as User mutator.
 type UserFunc func(context.Context, *app.UserMutation) (app.Value, error)

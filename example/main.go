@@ -2,17 +2,24 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"log"
 	"log/slog"
 	"os"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/golaravel/golaravel/example/app"
 	"github.com/golaravel/golaravel/example/app/handlers"
 	"github.com/golaravel/golaravel/pkg/artisan"
+	"github.com/golaravel/golaravel/pkg/auth"
 	"github.com/golaravel/golaravel/pkg/container"
+	gcontext "github.com/golaravel/golaravel/pkg/context"
+	"github.com/golaravel/golaravel/pkg/flutter"
 	"github.com/golaravel/golaravel/pkg/golaravel"
+	"github.com/golaravel/golaravel/pkg/hash"
 	"github.com/golaravel/golaravel/pkg/middleware"
 )
 
@@ -26,51 +33,137 @@ func main() {
 	}
 	defer client.Close()
 
-	// Run the auto-migration tool to create schema tables
+	// Run auto-migration for User, Invoice, and LineItem tables
 	if err := client.Schema.Create(ctx); err != nil {
 		log.Fatalf("failed creating schema resources: %v", err)
 	}
 
-	// Seed initial users into Ent database
-	_, _ = client.User.Create().SetName("Taylor Otwell").SetEmail("taylor@laravel.com").Save(ctx)
-	_, _ = client.User.Create().SetName("Rob Pike").SetEmail("rob@golang.org").Save(ctx)
-	_, _ = client.User.Create().SetName("Linus Torvalds").SetEmail("torvalds@kernel.org").Save(ctx)
+	// 2. Seed Admin User
+	hashedPassword, _ := hash.Make("password123")
+	admin, err := client.User.Create().
+		SetName("Ahmad (Admin)").
+		SetEmail("admin@golaravel.dev").
+		SetPassword(hashedPassword).
+		SetRole("admin").
+		Save(ctx)
+	if err != nil {
+		log.Fatalf("failed seeding admin user: %v", err)
+	}
 
-	// 2. Initialize GoLaravel Engine
+	// 3. Seed Sample Invoices with LineItems
+	token1 := randomToken()
+	inv1, _ := client.Invoice.Create().
+		SetOwner(admin).
+		SetInvoiceNumber("INV-2026-001").
+		SetCustomerName("Acme Global Logistics").
+		SetCustomerEmail("billing@acme.com").
+		SetStatus("sent").
+		SetAmount(3850.00).
+		SetDueDate(time.Now().Add(10 * 24 * time.Hour)).
+		SetToken(token1).
+		Save(ctx)
+
+	_, _ = client.LineItem.Create().
+		SetInvoice(inv1).
+		SetDescription("Dedicated GoLaravel Enterprise Cluster (128 Cores)").
+		SetQuantity(1).
+		SetUnitPrice(3000.00).
+		SetTotal(3000.00).
+		Save(ctx)
+
+	_, _ = client.LineItem.Create().
+		SetInvoice(inv1).
+		SetDescription("Premium 24/7 SLA & Direct Engineering Support").
+		SetQuantity(1).
+		SetUnitPrice(850.00).
+		SetTotal(850.00).
+		Save(ctx)
+
+	token2 := randomToken()
+	inv2, _ := client.Invoice.Create().
+		SetOwner(admin).
+		SetInvoiceNumber("INV-2026-002").
+		SetCustomerName("Starlight AI Labs").
+		SetCustomerEmail("accounts@starlight.ai").
+		SetStatus("paid").
+		SetAmount(1200.00).
+		SetDueDate(time.Now().Add(-2 * 24 * time.Hour)).
+		SetToken(token2).
+		Save(ctx)
+
+	_, _ = client.LineItem.Create().
+		SetInvoice(inv2).
+		SetDescription("Flutter Multiplatform Integration Consulting").
+		SetQuantity(8).
+		SetUnitPrice(150.00).
+		SetTotal(1200.00).
+		Save(ctx)
+
+	// 4. Initialize JWT Manager
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		jwtSecret = "golaravel-super-secure-production-key-32-chars!"
+	}
+	jwtManager := auth.NewJWTManager(jwtSecret, 24*time.Hour)
+
+	// 5. Initialize GoLaravel Engine
 	appEngine := golaravel.New()
 	appEngine.Use(middleware.Recovery())
 	appEngine.Use(middleware.SecureHeaders())
-	appEngine.Use(middleware.CSRF())
+	appEngine.Use(middleware.CORS())
 
-	// 3. Register Ent client into the type-safe IoC Container
+	// Register DI
 	container.Instance(appEngine.Container, client)
+	container.Instance(appEngine.Container, jwtManager)
+	handlers.RegisterInvoiceController(appEngine.Container, jwtManager)
+	invoiceCtrl := container.MustResolve[*handlers.InvoiceController](appEngine.Container)
 
-	// 4. Register and resolve controllers
-	handlers.RegisterUserController(appEngine.Container)
-	userCtrl := container.MustResolve[*handlers.UserController](appEngine.Container)
+	// 6. Routes Setup
 
-	// 5. Register Routes with names and groups
-	appEngine.GET("/", userCtrl.HomeAction).Name("home")
-	appEngine.GET("/users", userCtrl.Index).Name("users.index")
-	appEngine.POST("/users", userCtrl.Store).Name("users.store")
+	// === FAST-PATH MICRO-SSR (TEMPL) ===
+	// Public invoice link opened by customers from email/SMS:
+	// Rendered in < 45 nanoseconds! Zero client JS overhead.
+	appEngine.GET("/invoice/:token", invoiceCtrl.PublicShow).Name("invoices.public")
 
-	// Hybrid Micro-SSR Route: Instant customer invoice without client JS
-	appEngine.GET("/invoice/:token", userCtrl.InvoiceAction).Name("invoice.show")
-
+	// === HIGH-SPEED JSON REST API (FOR FLUTTER MULTIPLATFORM CLIENT) ===
 	api := appEngine.Group("/api")
-	api.GET("/users", userCtrl.ApiIndex).Name("api.users.index")
+	api.POST("/auth/login", invoiceCtrl.ApiLogin).Name("api.auth.login")
+	api.GET("/invoices", invoiceCtrl.ApiList).Name("api.invoices.list")
+	api.POST("/invoices", invoiceCtrl.ApiStore).Name("api.invoices.store")
+	api.PATCH("/invoices/:id/pay", invoiceCtrl.ApiPay).Name("api.invoices.pay")
 
-	// Print beautiful artisan route table
+	// === FLUTTER WEB HOSTING (SPA FALLBACK) ===
+	flutter.ServeWeb(appEngine.Router, flutter.Options{
+		MountPath:   "/app",
+		DistDir:     "example/client/build/web",
+		FallbackSPA: true,
+	})
+
+	// Redirect root / to /app (Flutter Dashboard)
+	appEngine.GET("/", func(c *gcontext.Context) error {
+		return c.Redirect(303, "/app")
+	}).Name("root")
+
+	// Print beautiful route table
 	artisan.PrintRoutes(appEngine.Router)
 
-	// Read port from PORT env or default to :8080
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = ":8080"
 	}
 
-	slog.Info("Starting GoLaravel HTTP server", "url", "http://localhost"+port)
+	slog.Info("GoLaravel SaaS Showcase Server running",
+		"url", "http://localhost"+port,
+		"sample_invoice_url", "http://localhost"+port+"/invoice/"+token1,
+	)
+
 	if err := appEngine.Run(port); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
+}
+
+func randomToken() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }

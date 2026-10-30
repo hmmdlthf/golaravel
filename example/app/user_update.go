@@ -10,6 +10,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/golaravel/golaravel/example/app/invoice"
 	"github.com/golaravel/golaravel/example/app/predicate"
 	"github.com/golaravel/golaravel/example/app/user"
 )
@@ -55,9 +56,73 @@ func (uu *UserUpdate) SetNillableEmail(s *string) *UserUpdate {
 	return uu
 }
 
+// SetPassword sets the "password" field.
+func (uu *UserUpdate) SetPassword(s string) *UserUpdate {
+	uu.mutation.SetPassword(s)
+	return uu
+}
+
+// SetNillablePassword sets the "password" field if the given value is not nil.
+func (uu *UserUpdate) SetNillablePassword(s *string) *UserUpdate {
+	if s != nil {
+		uu.SetPassword(*s)
+	}
+	return uu
+}
+
+// SetRole sets the "role" field.
+func (uu *UserUpdate) SetRole(s string) *UserUpdate {
+	uu.mutation.SetRole(s)
+	return uu
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (uu *UserUpdate) SetNillableRole(s *string) *UserUpdate {
+	if s != nil {
+		uu.SetRole(*s)
+	}
+	return uu
+}
+
+// AddInvoiceIDs adds the "invoices" edge to the Invoice entity by IDs.
+func (uu *UserUpdate) AddInvoiceIDs(ids ...int) *UserUpdate {
+	uu.mutation.AddInvoiceIDs(ids...)
+	return uu
+}
+
+// AddInvoices adds the "invoices" edges to the Invoice entity.
+func (uu *UserUpdate) AddInvoices(i ...*Invoice) *UserUpdate {
+	ids := make([]int, len(i))
+	for j := range i {
+		ids[j] = i[j].ID
+	}
+	return uu.AddInvoiceIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (uu *UserUpdate) Mutation() *UserMutation {
 	return uu.mutation
+}
+
+// ClearInvoices clears all "invoices" edges to the Invoice entity.
+func (uu *UserUpdate) ClearInvoices() *UserUpdate {
+	uu.mutation.ClearInvoices()
+	return uu
+}
+
+// RemoveInvoiceIDs removes the "invoices" edge to Invoice entities by IDs.
+func (uu *UserUpdate) RemoveInvoiceIDs(ids ...int) *UserUpdate {
+	uu.mutation.RemoveInvoiceIDs(ids...)
+	return uu
+}
+
+// RemoveInvoices removes "invoices" edges to Invoice entities.
+func (uu *UserUpdate) RemoveInvoices(i ...*Invoice) *UserUpdate {
+	ids := make([]int, len(i))
+	for j := range i {
+		ids[j] = i[j].ID
+	}
+	return uu.RemoveInvoiceIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -120,6 +185,57 @@ func (uu *UserUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := uu.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
 	}
+	if value, ok := uu.mutation.Password(); ok {
+		_spec.SetField(user.FieldPassword, field.TypeString, value)
+	}
+	if value, ok := uu.mutation.Role(); ok {
+		_spec.SetField(user.FieldRole, field.TypeString, value)
+	}
+	if uu.mutation.InvoicesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InvoicesTable,
+			Columns: []string{user.InvoicesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(invoice.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := uu.mutation.RemovedInvoicesIDs(); len(nodes) > 0 && !uu.mutation.InvoicesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InvoicesTable,
+			Columns: []string{user.InvoicesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(invoice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := uu.mutation.InvoicesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InvoicesTable,
+			Columns: []string{user.InvoicesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(invoice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, uu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{user.Label}
@@ -168,9 +284,73 @@ func (uuo *UserUpdateOne) SetNillableEmail(s *string) *UserUpdateOne {
 	return uuo
 }
 
+// SetPassword sets the "password" field.
+func (uuo *UserUpdateOne) SetPassword(s string) *UserUpdateOne {
+	uuo.mutation.SetPassword(s)
+	return uuo
+}
+
+// SetNillablePassword sets the "password" field if the given value is not nil.
+func (uuo *UserUpdateOne) SetNillablePassword(s *string) *UserUpdateOne {
+	if s != nil {
+		uuo.SetPassword(*s)
+	}
+	return uuo
+}
+
+// SetRole sets the "role" field.
+func (uuo *UserUpdateOne) SetRole(s string) *UserUpdateOne {
+	uuo.mutation.SetRole(s)
+	return uuo
+}
+
+// SetNillableRole sets the "role" field if the given value is not nil.
+func (uuo *UserUpdateOne) SetNillableRole(s *string) *UserUpdateOne {
+	if s != nil {
+		uuo.SetRole(*s)
+	}
+	return uuo
+}
+
+// AddInvoiceIDs adds the "invoices" edge to the Invoice entity by IDs.
+func (uuo *UserUpdateOne) AddInvoiceIDs(ids ...int) *UserUpdateOne {
+	uuo.mutation.AddInvoiceIDs(ids...)
+	return uuo
+}
+
+// AddInvoices adds the "invoices" edges to the Invoice entity.
+func (uuo *UserUpdateOne) AddInvoices(i ...*Invoice) *UserUpdateOne {
+	ids := make([]int, len(i))
+	for j := range i {
+		ids[j] = i[j].ID
+	}
+	return uuo.AddInvoiceIDs(ids...)
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (uuo *UserUpdateOne) Mutation() *UserMutation {
 	return uuo.mutation
+}
+
+// ClearInvoices clears all "invoices" edges to the Invoice entity.
+func (uuo *UserUpdateOne) ClearInvoices() *UserUpdateOne {
+	uuo.mutation.ClearInvoices()
+	return uuo
+}
+
+// RemoveInvoiceIDs removes the "invoices" edge to Invoice entities by IDs.
+func (uuo *UserUpdateOne) RemoveInvoiceIDs(ids ...int) *UserUpdateOne {
+	uuo.mutation.RemoveInvoiceIDs(ids...)
+	return uuo
+}
+
+// RemoveInvoices removes "invoices" edges to Invoice entities.
+func (uuo *UserUpdateOne) RemoveInvoices(i ...*Invoice) *UserUpdateOne {
+	ids := make([]int, len(i))
+	for j := range i {
+		ids[j] = i[j].ID
+	}
+	return uuo.RemoveInvoiceIDs(ids...)
 }
 
 // Where appends a list predicates to the UserUpdate builder.
@@ -262,6 +442,57 @@ func (uuo *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) 
 	}
 	if value, ok := uuo.mutation.Email(); ok {
 		_spec.SetField(user.FieldEmail, field.TypeString, value)
+	}
+	if value, ok := uuo.mutation.Password(); ok {
+		_spec.SetField(user.FieldPassword, field.TypeString, value)
+	}
+	if value, ok := uuo.mutation.Role(); ok {
+		_spec.SetField(user.FieldRole, field.TypeString, value)
+	}
+	if uuo.mutation.InvoicesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InvoicesTable,
+			Columns: []string{user.InvoicesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(invoice.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := uuo.mutation.RemovedInvoicesIDs(); len(nodes) > 0 && !uuo.mutation.InvoicesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InvoicesTable,
+			Columns: []string{user.InvoicesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(invoice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := uuo.mutation.InvoicesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.InvoicesTable,
+			Columns: []string{user.InvoicesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(invoice.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &User{config: uuo.config}
 	_spec.Assign = _node.assignValues

@@ -12,6 +12,8 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/golaravel/golaravel/example/app/invoice"
+	"github.com/golaravel/golaravel/example/app/lineitem"
 	"github.com/golaravel/golaravel/example/app/user"
 )
 
@@ -73,7 +75,9 @@ var (
 func checkColumn(table, column string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			user.Table: user.ValidColumn,
+			invoice.Table:  invoice.ValidColumn,
+			lineitem.Table: lineitem.ValidColumn,
+			user.Table:     user.ValidColumn,
 		})
 	})
 	return columnCheck(table, column)

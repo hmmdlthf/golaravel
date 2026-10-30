@@ -33,7 +33,8 @@ func (ctrl *UserController) InvoiceAction(c *context.Context) error {
 	if token == "" {
 		token = "INV-2026-8891"
 	}
-	return c.Templ(http.StatusOK, views.Invoice(token, "Acme International Corp", 2499.00, true))
+	// For UserController fallback, render home or redirect
+	return c.Redirect(http.StatusSeeOther, "/invoice/"+token)
 }
 
 // Index renders the user directory HTML view.

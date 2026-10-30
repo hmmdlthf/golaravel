@@ -5,6 +5,8 @@ package app
 import (
 	"time"
 
+	"github.com/golaravel/golaravel/example/app/invoice"
+	"github.com/golaravel/golaravel/example/app/lineitem"
 	"github.com/golaravel/golaravel/example/app/schema"
 	"github.com/golaravel/golaravel/example/app/user"
 )
@@ -13,6 +15,58 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	invoiceFields := schema.Invoice{}.Fields()
+	_ = invoiceFields
+	// invoiceDescInvoiceNumber is the schema descriptor for invoice_number field.
+	invoiceDescInvoiceNumber := invoiceFields[0].Descriptor()
+	// invoice.InvoiceNumberValidator is a validator for the "invoice_number" field. It is called by the builders before save.
+	invoice.InvoiceNumberValidator = invoiceDescInvoiceNumber.Validators[0].(func(string) error)
+	// invoiceDescCustomerName is the schema descriptor for customer_name field.
+	invoiceDescCustomerName := invoiceFields[1].Descriptor()
+	// invoice.CustomerNameValidator is a validator for the "customer_name" field. It is called by the builders before save.
+	invoice.CustomerNameValidator = invoiceDescCustomerName.Validators[0].(func(string) error)
+	// invoiceDescCustomerEmail is the schema descriptor for customer_email field.
+	invoiceDescCustomerEmail := invoiceFields[2].Descriptor()
+	// invoice.CustomerEmailValidator is a validator for the "customer_email" field. It is called by the builders before save.
+	invoice.CustomerEmailValidator = invoiceDescCustomerEmail.Validators[0].(func(string) error)
+	// invoiceDescStatus is the schema descriptor for status field.
+	invoiceDescStatus := invoiceFields[3].Descriptor()
+	// invoice.DefaultStatus holds the default value on creation for the status field.
+	invoice.DefaultStatus = invoiceDescStatus.Default.(string)
+	// invoiceDescAmount is the schema descriptor for amount field.
+	invoiceDescAmount := invoiceFields[4].Descriptor()
+	// invoice.DefaultAmount holds the default value on creation for the amount field.
+	invoice.DefaultAmount = invoiceDescAmount.Default.(float64)
+	// invoiceDescDueDate is the schema descriptor for due_date field.
+	invoiceDescDueDate := invoiceFields[5].Descriptor()
+	// invoice.DefaultDueDate holds the default value on creation for the due_date field.
+	invoice.DefaultDueDate = invoiceDescDueDate.Default.(func() time.Time)
+	// invoiceDescToken is the schema descriptor for token field.
+	invoiceDescToken := invoiceFields[6].Descriptor()
+	// invoice.TokenValidator is a validator for the "token" field. It is called by the builders before save.
+	invoice.TokenValidator = invoiceDescToken.Validators[0].(func(string) error)
+	// invoiceDescCreatedAt is the schema descriptor for created_at field.
+	invoiceDescCreatedAt := invoiceFields[7].Descriptor()
+	// invoice.DefaultCreatedAt holds the default value on creation for the created_at field.
+	invoice.DefaultCreatedAt = invoiceDescCreatedAt.Default.(func() time.Time)
+	lineitemFields := schema.LineItem{}.Fields()
+	_ = lineitemFields
+	// lineitemDescDescription is the schema descriptor for description field.
+	lineitemDescDescription := lineitemFields[0].Descriptor()
+	// lineitem.DescriptionValidator is a validator for the "description" field. It is called by the builders before save.
+	lineitem.DescriptionValidator = lineitemDescDescription.Validators[0].(func(string) error)
+	// lineitemDescQuantity is the schema descriptor for quantity field.
+	lineitemDescQuantity := lineitemFields[1].Descriptor()
+	// lineitem.DefaultQuantity holds the default value on creation for the quantity field.
+	lineitem.DefaultQuantity = lineitemDescQuantity.Default.(int)
+	// lineitemDescUnitPrice is the schema descriptor for unit_price field.
+	lineitemDescUnitPrice := lineitemFields[2].Descriptor()
+	// lineitem.DefaultUnitPrice holds the default value on creation for the unit_price field.
+	lineitem.DefaultUnitPrice = lineitemDescUnitPrice.Default.(float64)
+	// lineitemDescTotal is the schema descriptor for total field.
+	lineitemDescTotal := lineitemFields[3].Descriptor()
+	// lineitem.DefaultTotal holds the default value on creation for the total field.
+	lineitem.DefaultTotal = lineitemDescTotal.Default.(float64)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescName is the schema descriptor for name field.
@@ -23,8 +77,16 @@ func init() {
 	userDescEmail := userFields[1].Descriptor()
 	// user.EmailValidator is a validator for the "email" field. It is called by the builders before save.
 	user.EmailValidator = userDescEmail.Validators[0].(func(string) error)
+	// userDescPassword is the schema descriptor for password field.
+	userDescPassword := userFields[2].Descriptor()
+	// user.DefaultPassword holds the default value on creation for the password field.
+	user.DefaultPassword = userDescPassword.Default.(string)
+	// userDescRole is the schema descriptor for role field.
+	userDescRole := userFields[3].Descriptor()
+	// user.DefaultRole holds the default value on creation for the role field.
+	user.DefaultRole = userDescRole.Default.(string)
 	// userDescCreatedAt is the schema descriptor for created_at field.
-	userDescCreatedAt := userFields[2].Descriptor()
+	userDescCreatedAt := userFields[4].Descriptor()
 	// user.DefaultCreatedAt holds the default value on creation for the created_at field.
 	user.DefaultCreatedAt = userDescCreatedAt.Default.(func() time.Time)
 }

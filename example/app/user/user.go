@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -17,10 +18,23 @@ const (
 	FieldName = "name"
 	// FieldEmail holds the string denoting the email field in the database.
 	FieldEmail = "email"
+	// FieldPassword holds the string denoting the password field in the database.
+	FieldPassword = "password"
+	// FieldRole holds the string denoting the role field in the database.
+	FieldRole = "role"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
+	// EdgeInvoices holds the string denoting the invoices edge name in mutations.
+	EdgeInvoices = "invoices"
 	// Table holds the table name of the user in the database.
 	Table = "users"
+	// InvoicesTable is the table that holds the invoices relation/edge.
+	InvoicesTable = "invoices"
+	// InvoicesInverseTable is the table name for the Invoice entity.
+	// It exists in this package in order to avoid circular dependency with the "invoice" package.
+	InvoicesInverseTable = "invoices"
+	// InvoicesColumn is the table column denoting the invoices relation/edge.
+	InvoicesColumn = "user_invoices"
 )
 
 // Columns holds all SQL columns for user fields.
@@ -28,6 +42,8 @@ var Columns = []string{
 	FieldID,
 	FieldName,
 	FieldEmail,
+	FieldPassword,
+	FieldRole,
 	FieldCreatedAt,
 }
 
@@ -46,6 +62,10 @@ var (
 	NameValidator func(string) error
 	// EmailValidator is a validator for the "email" field. It is called by the builders before save.
 	EmailValidator func(string) error
+	// DefaultPassword holds the default value on creation for the "password" field.
+	DefaultPassword string
+	// DefaultRole holds the default value on creation for the "role" field.
+	DefaultRole string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
@@ -68,7 +88,38 @@ func ByEmail(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEmail, opts...).ToFunc()
 }
 
+// ByPassword orders the results by the password field.
+func ByPassword(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPassword, opts...).ToFunc()
+}
+
+// ByRole orders the results by the role field.
+func ByRole(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRole, opts...).ToFunc()
+}
+
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
+}
+
+// ByInvoicesCount orders the results by invoices count.
+func ByInvoicesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newInvoicesStep(), opts...)
+	}
+}
+
+// ByInvoices orders the results by invoices terms.
+func ByInvoices(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newInvoicesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newInvoicesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(InvoicesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, InvoicesTable, InvoicesColumn),
+	)
 }

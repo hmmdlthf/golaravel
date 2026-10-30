@@ -6,5 +6,11 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// Invoice is the predicate function for invoice builders.
+type Invoice func(*sql.Selector)
+
+// LineItem is the predicate function for lineitem builders.
+type LineItem func(*sql.Selector)
+
 // User is the predicate function for user builders.
 type User func(*sql.Selector)

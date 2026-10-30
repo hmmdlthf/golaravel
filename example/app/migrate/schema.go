@@ -8,11 +8,63 @@ import (
 )
 
 var (
+	// InvoicesColumns holds the columns for the "invoices" table.
+	InvoicesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "invoice_number", Type: field.TypeString, Unique: true},
+		{Name: "customer_name", Type: field.TypeString},
+		{Name: "customer_email", Type: field.TypeString},
+		{Name: "status", Type: field.TypeString, Default: "sent"},
+		{Name: "amount", Type: field.TypeFloat64, Default: 0},
+		{Name: "due_date", Type: field.TypeTime},
+		{Name: "token", Type: field.TypeString, Unique: true},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "user_invoices", Type: field.TypeInt, Nullable: true},
+	}
+	// InvoicesTable holds the schema information for the "invoices" table.
+	InvoicesTable = &schema.Table{
+		Name:       "invoices",
+		Columns:    InvoicesColumns,
+		PrimaryKey: []*schema.Column{InvoicesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "invoices_users_invoices",
+				Columns:    []*schema.Column{InvoicesColumns[9]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+	}
+	// LineItemsColumns holds the columns for the "line_items" table.
+	LineItemsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "description", Type: field.TypeString},
+		{Name: "quantity", Type: field.TypeInt, Default: 1},
+		{Name: "unit_price", Type: field.TypeFloat64, Default: 0},
+		{Name: "total", Type: field.TypeFloat64, Default: 0},
+		{Name: "invoice_items", Type: field.TypeInt},
+	}
+	// LineItemsTable holds the schema information for the "line_items" table.
+	LineItemsTable = &schema.Table{
+		Name:       "line_items",
+		Columns:    LineItemsColumns,
+		PrimaryKey: []*schema.Column{LineItemsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "line_items_invoices_items",
+				Columns:    []*schema.Column{LineItemsColumns[5]},
+				RefColumns: []*schema.Column{InvoicesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "name", Type: field.TypeString},
 		{Name: "email", Type: field.TypeString, Unique: true},
+		{Name: "password", Type: field.TypeString, Default: ""},
+		{Name: "role", Type: field.TypeString, Default: "member"},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// UsersTable holds the schema information for the "users" table.
@@ -23,9 +75,13 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		InvoicesTable,
+		LineItemsTable,
 		UsersTable,
 	}
 )
 
 func init() {
+	InvoicesTable.ForeignKeys[0].RefTable = UsersTable
+	LineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
 }
