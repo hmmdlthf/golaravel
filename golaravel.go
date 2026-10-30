@@ -26,6 +26,7 @@ import (
 	"github.com/golaravel/golaravel/pkg/schedule"
 	"github.com/golaravel/golaravel/pkg/session"
 	"github.com/golaravel/golaravel/pkg/storage"
+	"github.com/golaravel/golaravel/pkg/telemetry"
 	gltest "github.com/golaravel/golaravel/pkg/testing"
 	"github.com/golaravel/golaravel/pkg/validation"
 )
@@ -423,5 +424,32 @@ var (
 		AssertNothingSent: glhttp.AssertNothingSent,
 		Recorded:          glhttp.Recorded,
 		Reset:             glhttp.Reset,
+	}
+
+	// Telemetry provides access to Prometheus metrics, OpenTelemetry distributed tracing, and Health checks
+	Telemetry = struct {
+		Metrics           func() *telemetry.Registry
+		Tracer            func() *telemetry.Tracer
+		Health            func() *telemetry.HealthRegistry
+		Mount             func(r router.RouteRegistrar, opts ...telemetry.MountOptions)
+		MetricsMiddleware func(reg *telemetry.Registry, opts ...telemetry.MiddlewareOptions) context.HandlerFunc
+		TraceMiddleware   func(tracer *telemetry.Tracer) context.HandlerFunc
+		NewCounter        func(name, help string, labels ...string) *telemetry.Counter
+		NewGauge          func(name, help string, labels ...string) *telemetry.Gauge
+		NewHistogram      func(name, help string, buckets []float64, labels ...string) *telemetry.Histogram
+		StartSpan         func(ctx stdContext.Context, name string) (stdContext.Context, *telemetry.Span)
+		RegisterHealth    func(check telemetry.Check)
+	}{
+		Metrics:           telemetry.DefaultRegistry,
+		Tracer:            telemetry.DefaultTracer,
+		Health:            telemetry.DefaultHealth,
+		Mount:             telemetry.Mount,
+		MetricsMiddleware: telemetry.MetricsMiddleware,
+		TraceMiddleware:   telemetry.TraceMiddleware,
+		NewCounter:        telemetry.NewCounter,
+		NewGauge:          telemetry.NewGauge,
+		NewHistogram:      telemetry.NewHistogram,
+		StartSpan:         telemetry.StartSpan,
+		RegisterHealth:    telemetry.RegisterHealth,
 	}
 )

@@ -128,3 +128,15 @@ func TestMakeOAuth_Scaffold(t *testing.T) {
 		t.Fatal("file does not contain user callback handler")
 	}
 }
+
+func TestHealthCheckCommand(t *testing.T) {
+	reg := NewRegistry()
+	if _, ok := reg.commands["health"]; !ok {
+		t.Fatal("expected 'health' command to be registered in artisan registry")
+	}
+
+	// Run artisan health
+	if err := runHealthCheck(nil); err != nil {
+		t.Fatalf("runHealthCheck failed: %v", err)
+	}
+}

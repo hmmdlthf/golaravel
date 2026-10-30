@@ -121,13 +121,20 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
     - Comprehensive Mocking Engine (`Http.Fake()`, Sequences, Wildcards)
     - Test Assertions (`AssertSent`, `AssertSentCount`, `AssertNothingSent`)
 
-18. **[Artisan CLI Reference](./artisan-cli.md)**
+18. **[Prometheus, OpenTelemetry & Health Check Engine (PRD §9)](./telemetry-and-health-checks.md)**
+    - Prometheus Metrics Exposition (`/metrics`) with Go Runtime Statistics
+    - OpenTelemetry Distributed Tracing & W3C Trace Context Propagation (`traceparent`)
+    - Multi-Subsystem Health Probes (`/health`, `/livez`, `/readyz`)
+    - HTTP Observability Middlewares (`MetricsMiddleware`, `TraceMiddleware`)
+    - Terminal Health Dashboard (`artisan health`)
+
+19. **[Artisan CLI Reference](./artisan-cli.md)**
     - Project Creation (`artisan new`)
     - Full-Stack CRUD Scaffolder (`artisan make:crud <Name>`) (PRD §8.2)
     - Database Migrations & Seeding (`migrate`, `migrate:diff`, `db:seed`, etc.)
     - Generator Commands (`make:crud`, `make:schema`, `make:controller`, `make:job`, `make:notification`, `make:scope`, etc.)
-    - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`)
+    - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`, `health`)
 
-19. **[Performance & Benchmarks](./benchmarks.md)**
+20. **[Performance & Benchmarks](./benchmarks.md)**
     - Zero-Allocation Architecture Methodology
     - Micro-benchmark Results vs Gin, Fiber, and Laravel Octane

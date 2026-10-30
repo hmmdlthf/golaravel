@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/golaravel/golaravel/pkg/queue"
 	"github.com/golaravel/golaravel/pkg/router"
+	"github.com/golaravel/golaravel/pkg/telemetry"
 )
 
 // Command defines a CLI command in Artisan.
@@ -227,6 +229,12 @@ func (r *Registry) registerDefaults() {
 		Name:        "queue:flush",
 		Description: "Flush all failed jobs from Dead-Letter Queue (DLQ)",
 		Run:         runQueueFlush,
+	})
+
+	r.Register(&Command{
+		Name:        "health",
+		Description: "Run all subsystem health checks and display status report",
+		Run:         runHealthCheck,
 	})
 
 	r.Register(&Command{
@@ -1003,6 +1011,73 @@ func runFlutterBuild(args []string) error {
 	}
 
 	fmt.Println("\033[32mSUCCESS\033[0m Flutter Web application built successfully in client/build/web.")
+	return nil
+}
+
+func runHealthCheck(args []string) error {
+	health := telemetry.DefaultHealth()
+
+	// If no checks registered yet, add standard memory & disk checks
+	if _, ok := health.RunCheck(context.Background(), "memory"); !ok {
+		health.Register(telemetry.MemoryCheck("memory", 512*1024*1024))
+	}
+	if _, ok := health.RunCheck(context.Background(), "disk"); !ok {
+		health.Register(telemetry.DiskCheck("disk", ".", 500*1024*1024))
+	}
+
+	report := health.Run(context.Background())
+
+	statusBadge := "\033[32m[HEALTHY]\033[0m"
+	if report.Status == telemetry.StatusDegraded {
+		statusBadge = "\033[33m[DEGRADED]\033[0m"
+	} else if report.Status == telemetry.StatusUnhealthy {
+		statusBadge = "\033[31m[UNHEALTHY]\033[0m"
+	}
+
+	fmt.Printf("\nGoLaravel System Health Status: %s (Uptime: %s)\n\n", statusBadge, report.Uptime)
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "  SUBSYSTEM\tSTATUS\tLATENCY\tDETAILS")
+	fmt.Fprintln(w, "  ---------\t------\t-------\t-------")
+
+	var names []string
+	for k := range report.Checks {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		res := report.Checks[name]
+		badge := "\033[32mPASS\033[0m"
+		if res.Status == telemetry.StatusDegraded {
+			badge = "\033[33mWARN\033[0m"
+		} else if res.Status == telemetry.StatusUnhealthy {
+			badge = "\033[31mFAIL\033[0m"
+		}
+
+		detailStr := ""
+		if res.Error != "" {
+			detailStr = fmt.Sprintf("\033[31m%s\033[0m", res.Error)
+		} else if len(res.Details) > 0 {
+			var parts []string
+			for k, v := range res.Details {
+				parts = append(parts, fmt.Sprintf("%s=%v", k, v))
+			}
+			detailStr = strings.Join(parts, ", ")
+			if len(detailStr) > 40 {
+				detailStr = detailStr[:37] + "..."
+			}
+		}
+
+		fmt.Fprintf(w, "  \033[1;37m%-10s\033[0m\t%s\t%.2fms\t%s\n",
+			res.Name, badge, res.LatencyMS, detailStr)
+	}
+	_ = w.Flush()
+	fmt.Println()
+
+	if report.Status == telemetry.StatusUnhealthy {
+		return fmt.Errorf("system health check failed with status %s", report.Status)
+	}
 	return nil
 }
 

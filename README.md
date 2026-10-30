@@ -113,6 +113,7 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - ☁️ **[Cloud Filesystem (S3, MinIO, Local Disk) & Presigned URLs](./docs/cloud-storage-and-s3.md)**
 - 🧪 **[Full-Stack HTTP Testing Harness & Assertion Toolkit](./docs/testing.md)**
 - 🌐 **[Fluent HTTP Client & Mocking Engine](./docs/fluent-http-client.md)**
+- 📊 **[Prometheus, OpenTelemetry & Health Checks](./docs/telemetry-and-health-checks.md)**
 - 🛠️ **[Artisan CLI Reference](./docs/artisan-cli.md)**
 - 📊 **[Performance Benchmarks](./docs/benchmarks.md)**
 
@@ -139,6 +140,7 @@ artisan make:middleware Auth# Create middleware
 
 # Server & Workers
 artisan serve               # Start HTTP development server
+artisan health              # Check system and subsystem health status
 artisan queue:work          # Launch background queue worker pool
 artisan queue:failed        # List failed jobs in Dead-Letter Queue (DLQ)
 artisan queue:retry <id|all># Retry failed job(s) from DLQ
