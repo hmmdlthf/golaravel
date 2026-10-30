@@ -1,12 +1,15 @@
 package artisan
 
 import (
+	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/golaravel/golaravel/pkg/queue"
+	"github.com/golaravel/golaravel/pkg/schedule"
 )
 
 func TestArtisan_QueueCommands(t *testing.T) {
@@ -139,4 +142,52 @@ func TestHealthCheckCommand(t *testing.T) {
 	if err := runHealthCheck(nil); err != nil {
 		t.Fatalf("runHealthCheck failed: %v", err)
 	}
+}
+
+func TestScheduleCommands(t *testing.T) {
+	reg := NewRegistry()
+
+	// Verify all schedule commands are registered
+	scheduleCmds := []string{"schedule:run", "schedule:work", "schedule:list"}
+	for _, cmd := range scheduleCmds {
+		if _, ok := reg.commands[cmd]; !ok {
+			t.Fatalf("expected command '%s' to be registered", cmd)
+		}
+	}
+
+	// Clean scheduler
+	schedule.Clear()
+
+	// 1. Test schedule:list on empty list
+	if err := runScheduleList(nil); err != nil {
+		t.Fatalf("runScheduleList on empty failed: %v", err)
+	}
+
+	// 2. Register mock tasks
+	var executed bool
+	schedule.Call(func(ctx context.Context) error {
+		executed = true
+		return nil
+	}).Name("mock:sync").EveryMinute().WithoutOverlapping()
+
+	schedule.Call(func(ctx context.Context) error {
+		return errors.New("failing-task-error")
+	}).Name("mock:fail").EveryMinute().OnOneServer()
+
+	// 3. Test schedule:list with registered tasks
+	if err := runScheduleList(nil); err != nil {
+		t.Fatalf("runScheduleList failed: %v", err)
+	}
+
+	// 4. Test schedule:run
+	err := runScheduleRun(nil)
+	if err == nil {
+		t.Fatal("expected runScheduleRun to report error from failing task")
+	}
+	if !executed {
+		t.Fatal("expected mock:sync to execute")
+	}
+
+	// 5. Clean scheduler after test
+	schedule.Clear()
 }

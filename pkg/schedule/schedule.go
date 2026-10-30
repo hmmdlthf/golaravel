@@ -2,135 +2,59 @@ package schedule
 
 import (
 	"context"
-	"fmt"
-	"log/slog"
-	"sync"
 	"time"
+
+	"github.com/golaravel/golaravel/pkg/queue"
 )
 
-// ScheduledTask represents an item registered in the in-process cron scheduler.
-type ScheduledTask struct {
-	description string
-	interval    time.Duration
-	exactHour   int
-	exactMin    int
-	useExact    bool
-	lastRun     time.Time
-	action      func(ctx context.Context) error
+var defaultScheduler = NewScheduler()
+
+// DefaultScheduler returns the package-level singleton scheduler instance.
+func DefaultScheduler() *Scheduler {
+	return defaultScheduler
 }
 
-// EveryMinute schedules the task to run every minute.
-func (st *ScheduledTask) EveryMinute() *ScheduledTask {
-	st.interval = 1 * time.Minute
-	st.useExact = false
-	return st
+// Call schedules a closure to be executed on the default scheduler.
+func Call(action func(ctx context.Context) error) *Event {
+	return defaultScheduler.Call(action)
 }
 
-// EveryFiveMinutes schedules the task to run every 5 minutes.
-func (st *ScheduledTask) EveryFiveMinutes() *ScheduledTask {
-	st.interval = 5 * time.Minute
-	st.useExact = false
-	return st
+// Exec schedules an OS command to be executed on the default scheduler.
+func Exec(command string, args ...string) *Event {
+	return defaultScheduler.Exec(command, args...)
 }
 
-// Hourly schedules the task to run once an hour.
-func (st *ScheduledTask) Hourly() *ScheduledTask {
-	st.interval = 1 * time.Hour
-	st.useExact = false
-	return st
+// Job schedules a queue.Job to be dispatched on the default scheduler.
+func Job(job queue.Job) *Event {
+	return defaultScheduler.Job(job)
 }
 
-// Daily schedules the task to run once every 24 hours.
-func (st *ScheduledTask) Daily() *ScheduledTask {
-	st.interval = 24 * time.Hour
-	st.useExact = false
-	return st
+// Register adds a pre-configured Event to the default scheduler.
+func Register(event *Event) *Event {
+	return defaultScheduler.Register(event)
 }
 
-// DailyAt schedules the task at an exact time (e.g. "00:00" or "14:30").
-func (st *ScheduledTask) DailyAt(timeStr string) *ScheduledTask {
-	var hour, min int
-	_, err := fmt.Sscanf(timeStr, "%d:%d", &hour, &min)
-	if err == nil {
-		st.exactHour = hour
-		st.exactMin = min
-		st.useExact = true
-	}
-	return st
+// Events returns all events registered on the default scheduler.
+func Events() []*Event {
+	return defaultScheduler.Events()
 }
 
-// Scheduler coordinates all recurring tasks.
-type Scheduler struct {
-	tasks []*ScheduledTask
-	mu    sync.RWMutex
+// Clear removes all tasks from the default scheduler.
+func Clear() {
+	defaultScheduler.Clear()
 }
 
-// Global default scheduler
-var globalScheduler = NewScheduler()
-
-// NewScheduler creates a new task scheduler.
-func NewScheduler() *Scheduler {
-	return &Scheduler{
-		tasks: make([]*ScheduledTask, 0, 16),
-	}
+// RunDue executes all tasks due at the given timestamp on the default scheduler.
+func RunDue(ctx context.Context, now time.Time) []TaskResult {
+	return defaultScheduler.RunDue(ctx, now)
 }
 
-// Call schedules a function to be executed.
-func (s *Scheduler) Call(action func(ctx context.Context) error) *ScheduledTask {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	task := &ScheduledTask{
-		interval: 1 * time.Minute,
-		action:   action,
-	}
-	s.tasks = append(s.tasks, task)
-	return task
+// Start launches the in-process scheduler ticker loop on the default scheduler.
+func Start(ctx context.Context) {
+	defaultScheduler.Start(ctx)
 }
 
-// Start launches the in-process scheduler ticker loop.
-func (s *Scheduler) Start(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Second)
-	go func() {
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case now := <-ticker.C:
-				s.evaluate(ctx, now)
-			}
-		}
-	}()
+// Stop halts the default scheduler ticker loop.
+func Stop() {
+	defaultScheduler.Stop()
 }
-
-func (s *Scheduler) evaluate(ctx context.Context, now time.Time) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	for _, task := range s.tasks {
-		if task.useExact {
-			if now.Hour() == task.exactHour && now.Minute() == task.exactMin {
-				if task.lastRun.Day() != now.Day() {
-					task.lastRun = now
-					go s.runTask(ctx, task)
-				}
-			}
-		} else {
-			if task.lastRun.IsZero() || now.Sub(task.lastRun) >= task.interval {
-				task.lastRun = now
-				go s.runTask(ctx, task)
-			}
-		}
-	}
-}
-
-func (s *Scheduler) runTask(ctx context.Context, task *ScheduledTask) {
-	if err := task.action(ctx); err != nil {
-		slog.Error("Scheduled task failed", "error", err)
-	}
-}
-
-// Global helper functions
-func Call(action func(ctx context.Context) error) *ScheduledTask { return globalScheduler.Call(action) }
-func Start(ctx context.Context)                                 { globalScheduler.Start(ctx) }

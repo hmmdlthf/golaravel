@@ -12,9 +12,11 @@ import (
 	"strings"
 	"syscall"
 	"text/tabwriter"
+	"time"
 
 	"github.com/golaravel/golaravel/pkg/queue"
 	"github.com/golaravel/golaravel/pkg/router"
+	"github.com/golaravel/golaravel/pkg/schedule"
 	"github.com/golaravel/golaravel/pkg/telemetry"
 )
 
@@ -235,6 +237,24 @@ func (r *Registry) registerDefaults() {
 		Name:        "health",
 		Description: "Run all subsystem health checks and display status report",
 		Run:         runHealthCheck,
+	})
+
+	r.Register(&Command{
+		Name:        "schedule:run",
+		Description: "Run the scheduled tasks due right now",
+		Run:         runScheduleRun,
+	})
+
+	r.Register(&Command{
+		Name:        "schedule:work",
+		Description: "Run the scheduled tasks worker daemon",
+		Run:         runScheduleWork,
+	})
+
+	r.Register(&Command{
+		Name:        "schedule:list",
+		Description: "List all registered scheduled tasks",
+		Run:         runScheduleList,
 	})
 
 	r.Register(&Command{
@@ -1078,6 +1098,120 @@ func runHealthCheck(args []string) error {
 	if report.Status == telemetry.StatusUnhealthy {
 		return fmt.Errorf("system health check failed with status %s", report.Status)
 	}
+	return nil
+}
+
+func runScheduleRun(args []string) error {
+	now := time.Now()
+	fmt.Printf("\n\033[1;36mRunning scheduled tasks [%s]...\033[0m\n", now.Format("2006-01-02 15:04:05"))
+
+	results := schedule.RunDue(context.Background(), now)
+	if len(results) == 0 {
+		fmt.Println("No scheduled tasks are due to run.")
+		fmt.Println()
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
+	var succeeded, failed int
+	for _, res := range results {
+		name := res.Event.GetName()
+		if res.Error != nil {
+			failed++
+			fmt.Fprintf(w, "  \033[31m[%s]\033[0m %-30s \033[31mFAIL (%.3fs)\033[0m: %v\n",
+				res.StartedAt.Format("15:04:05"), name, res.Duration.Seconds(), res.Error)
+		} else {
+			succeeded++
+			fmt.Fprintf(w, "  \033[32m[%s]\033[0m %-30s \033[32mDONE (%.3fs)\033[0m\n",
+				res.StartedAt.Format("15:04:05"), name, res.Duration.Seconds())
+		}
+	}
+	_ = w.Flush()
+	fmt.Printf("\nSummary: %d executed, %d succeeded, %d failed.\n\n", len(results), succeeded, failed)
+	if failed > 0 {
+		return fmt.Errorf("%d scheduled task(s) failed", failed)
+	}
+	return nil
+}
+
+func runScheduleWork(args []string) error {
+	fmt.Println("\n\033[1;32mGoLaravel Schedule Worker Daemon started.\033[0m")
+	fmt.Println("Running due tasks every minute. Press Ctrl+C to stop.")
+	fmt.Println()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	var lastMinute time.Time
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("\nSchedule worker daemon gracefully stopped.")
+			return nil
+		case now := <-ticker.C:
+			currentMinute := now.Truncate(time.Minute)
+			if currentMinute.After(lastMinute) {
+				lastMinute = currentMinute
+				results := schedule.RunDue(ctx, now)
+				for _, res := range results {
+					if res.Error != nil {
+						fmt.Printf("[%s] Task '%s' FAILED (%.3fs): %v\n",
+							now.Format("15:04:05"), res.Event.GetName(), res.Duration.Seconds(), res.Error)
+					} else {
+						fmt.Printf("[%s] Task '%s' DONE (%.3fs)\n",
+							now.Format("15:04:05"), res.Event.GetName(), res.Duration.Seconds())
+					}
+				}
+			}
+		}
+	}
+}
+
+func runScheduleList(args []string) error {
+	events := schedule.Events()
+	fmt.Println("\n\033[1;37mGoLaravel Scheduled Tasks:\033[0m")
+	if len(events) == 0 {
+		fmt.Println("  No scheduled tasks registered.")
+		fmt.Println()
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 4, ' ', 0)
+	fmt.Fprintln(w, "  TASK / COMMAND\tCRON\tNEXT DUE\tTIMEZONE\tOVERLAP\tONE SERVER")
+	fmt.Fprintln(w, "  --------------\t----\t--------\t--------\t-------\t----------")
+
+	now := time.Now()
+	for _, e := range events {
+		name := e.GetName()
+		cron := e.GetCronExpression()
+		if cron == "" {
+			cron = "* * * * *"
+		}
+		next := e.Next(now)
+		nextStr := "never"
+		if !next.IsZero() {
+			nextStr = next.Format("2006-01-02 15:04:05")
+		}
+		tz := e.GetTimezone().String()
+
+		overlap := "\033[32mAllow\033[0m"
+		if e.IsWithoutOverlapping() {
+			overlap = "\033[33mBlock\033[0m"
+		}
+
+		oneServer := "\033[90mNo\033[0m"
+		if e.IsOnOneServer() {
+			oneServer = "\033[36mYes\033[0m"
+		}
+
+		fmt.Fprintf(w, "  \033[1;36m%-20s\033[0m\t%-12s\t%-19s\t%-12s\t%s\t%s\n",
+			name, cron, nextStr, tz, overlap, oneServer)
+	}
+	_ = w.Flush()
+	fmt.Println()
 	return nil
 }
 

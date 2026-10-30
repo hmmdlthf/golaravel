@@ -97,7 +97,7 @@ artisan flutter:build
 
 ---
 
-## 5. Server & Worker Commands
+## 5. Server, Worker & Scheduler Commands
 
 ### `artisan serve`
 Starts the HTTP development server on port 8080 (or custom port):
@@ -112,4 +112,25 @@ Launches concurrent background worker goroutines to process enqueued jobs:
 
 ```bash
 artisan queue:work
+```
+
+### `artisan schedule:list`
+Displays a formatted ASCII table of all registered scheduled tasks, cron expressions, next due times, timezones, and concurrency locks:
+
+```bash
+artisan schedule:list
+```
+
+### `artisan schedule:run`
+Executes all tasks due at the current minute. Ideal for invoking from your server crontab (`* * * * *`):
+
+```bash
+artisan schedule:run
+```
+
+### `artisan schedule:work`
+Runs an in-process schedule daemon that executes `schedule:run` every minute without needing external crond:
+
+```bash
+artisan schedule:work
 ```

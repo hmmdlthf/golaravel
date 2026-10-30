@@ -238,9 +238,27 @@ var (
 
 	// Schedule provides access to fluent task scheduling
 	Schedule = struct {
-		Call func(action func(ctx stdContext.Context) error) *schedule.ScheduledTask
+		Call      func(action func(ctx stdContext.Context) error) *schedule.Event
+		Exec      func(command string, args ...string) *schedule.Event
+		Job       func(job queue.Job) *schedule.Event
+		Register  func(event *schedule.Event) *schedule.Event
+		Events    func() []*schedule.Event
+		Clear     func()
+		RunDue    func(ctx stdContext.Context, now time.Time) []schedule.TaskResult
+		Start     func(ctx stdContext.Context)
+		Stop      func()
+		Scheduler func() *schedule.Scheduler
 	}{
-		Call: schedule.Call,
+		Call:      schedule.Call,
+		Exec:      schedule.Exec,
+		Job:       schedule.Job,
+		Register:  schedule.Register,
+		Events:    schedule.Events,
+		Clear:     schedule.Clear,
+		RunDue:    schedule.RunDue,
+		Start:     schedule.Start,
+		Stop:      schedule.Stop,
+		Scheduler: schedule.DefaultScheduler,
 	}
 
 	// Auth provides access to authentication helpers

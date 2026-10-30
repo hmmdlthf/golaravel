@@ -18,7 +18,7 @@ The fastest full-stack web framework in the world — pairing the developer ergo
 | **Auth & Security** | Multi-Guard Auth | JWT Bearer tokens, Session cookies, Argon2id & Bcrypt, Gates & Policies |
 | **Validation** | Form Requests | Struct-level binding with Laravel-compatible **422 Unprocessable Entity** error bags |
 | **Async Processing** | Queues & Workers | In-memory & Redis worker pools with automatic retries and dead-letter handling |
-| **Task Scheduling** | In-Process Cron | Fluent Go scheduler (`DailyAt`, `Hourly`, `EveryMinute`) |
+| **Task Scheduling** | Distributed In-Process Cron | Standard 5-field cron parser, atomic locking (`WithoutOverlapping`, `OnOneServer`), `schedule:run`, `schedule:work` |
 | **Filesystem & Cache** | Flysystem & Cache Facades | Local disk, S3, Memory cache with automatic TTL eviction |
 | **CLI Tool** | **Artisan for Go** | Project scaffolder (`artisan new`), generator suite, and lifecycle runners |
 
@@ -57,7 +57,7 @@ golaravel/
 │   ├── hash/               # Password hashing (Argon2id, Bcrypt with work-factor upgrades)
 │   ├── validation/         # Form requests with 422 JSON error bags
 │   ├── queue/              # Concurrent background job queues & worker pools
-│   ├── schedule/           # In-process fluent cron scheduler
+│   ├── schedule/           # In-process fluent cron scheduler & distributed task runner
 │   ├── events/             # Synchronous & asynchronous event dispatcher
 │   ├── cache/              # Tagged cache engine, atomic locks, Memory & Redis with TTL
 │   ├── storage/            # Multi-disk cloud filesystem (S3, MinIO, Local, SigV4 Presigned URLs)
@@ -70,6 +70,7 @@ golaravel/
 │   ├── database/           # High-concurrency connection pools, Atlas migrations & Seeders
 │   ├── http/               # Fluent outbound HTTP client & mocking engine (Http::fake)
 │   ├── testing/            # Full-stack HTTP testing harness & assertion toolkit
+│   ├── telemetry/          # Prometheus metrics, OpenTelemetry W3C distributed tracing & health checks
 │   └── artisan/            # Artisan command registry & generators
 ├── example/                # Full reference app (Ent ORM + Templ + Flutter Hybrid)
 └── benchmarks/             # Micro and end-to-end benchmark suite
@@ -138,11 +139,14 @@ artisan make:scope Active   # Create global Ent query scope
 artisan make:view posts     # Create Templ view
 artisan make:middleware Auth# Create middleware
 
-# Server & Workers
+# Server, Workers & Scheduler
 artisan serve               # Start HTTP development server
 artisan health              # Check system and subsystem health status
 artisan queue:work          # Launch background queue worker pool
 artisan queue:failed        # List failed jobs in Dead-Letter Queue (DLQ)
 artisan queue:retry <id|all># Retry failed job(s) from DLQ
 artisan queue:flush         # Flush all failed jobs from DLQ
+artisan schedule:list       # List all registered scheduled tasks and next due times
+artisan schedule:run        # Run scheduled tasks due right now (for server crontab)
+artisan schedule:work       # Run in-process schedule worker daemon every minute
 ```

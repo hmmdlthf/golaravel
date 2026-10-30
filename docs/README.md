@@ -85,56 +85,63 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
     - Dead-Letter Queue (DLQ) & `FailedJobStore` (Memory & Redis Hashes)
     - Horizon-Equivalent Worker Dashboard Web UI & JSON APIs (`/queue/dashboard`)
     - Artisan CLI Queue Operations (`queue:work`, `queue:failed`, `queue:retry`, `queue:flush`)
-    - Task Scheduling (`pkg/schedule`, `DailyAt`, `Hourly`) (see [Queues & Scheduling](./queues-and-scheduling.md))
 
-12. **[Realtime WebSockets & SSE Broadcasting (PRD §5.3)](./realtime-broadcasting.md)**
+13. **[Advanced In-Process Cron Scheduler & Distributed Task Runner (PRD §5.2)](./task-scheduling.md)**
+    - Standard 5-Part Cron Parser with Lists, Ranges, and Steps (`ParseCron`, `Matches`, `Next`)
+    - Fluent Timing Directives (`EveryMinute`, `HourlyAt`, `DailyAt`, `WeeklyOn`, `Between`, `Timezone`)
+    - Concurrency & Multi-Server Controls (`WithoutOverlapping`, `OnOneServer`, `RunInBackground`)
+    - Multi-Target Handlers (Closures, OS Commands `Exec`, Queued Jobs `Job`)
+    - Lifecycle Callbacks & Conditionals (`When`, `Skip`, `Before`, `After`, `OnSuccess`, `OnFailure`)
+    - Artisan Scheduler Suite (`schedule:list`, `schedule:run`, `schedule:work`)
+
+14. **[Realtime WebSockets & SSE Broadcasting (PRD §5.3)](./realtime-broadcasting.md)**
     - Realtime Broadcasting Architecture (WebSockets vs SSE)
     - Live Ent Model Mutation Hooks (`EntMutationHook`)
     - Flutter and Browser Native Client Subscriptions
 
-13. **[Multi-Channel Notifications Engine (PRD §7)](./notifications.md)**
+15. **[Multi-Channel Notifications Engine (PRD §7)](./notifications.md)**
     - Unified Notification Delivery (Email, In-App Database, Broadcast, Slack, SMS)
     - Notifiable Recipients & On-Demand Routing
     - Asynchronous Queued Notifications (`ShouldQueue`)
     - Generator Command (`artisan make:notification`)
 
-14. **[Tagged Cache Engine & Atomic Locks (PRD §7)](./tagged-cache-and-locks.md)**
+16. **[Tagged Cache Engine & Atomic Locks (PRD §7)](./tagged-cache-and-locks.md)**
     - O(1) Tagged Cache Invalidation (`Cache.Tags(...)`)
     - Distributed & In-Process Atomic Locks (`Cache.Lock(...)`)
     - Automatic Lock Expiration & Auto-Release (`Lock.Get`, `Lock.Block`)
 
-15. **[Cloud Filesystem & Presigned URLs (PRD §7)](./cloud-storage-and-s3.md)**
+17. **[Cloud Filesystem & Presigned URLs (PRD §7)](./cloud-storage-and-s3.md)**
     - Multi-Disk Registry (`local`, `public`, `s3`, `minio`)
     - Zero-External-SDK AWS Signature Version 4 (SigV4) Engine
     - Time-Limited Presigned URLs (`TemporaryURL`, `PresignedPutURL`)
     - Direct Client Uploads & Multipart Form Helpers (`c.FormFile`, `c.SaveUploadedFile`)
 
-16. **[HTTP Testing Harness & Assertion Toolkit (PRD §5)](./testing.md)**
+18. **[HTTP Testing Harness & Assertion Toolkit (PRD §5)](./testing.md)**
     - Zero-Network Direct In-Memory Pipeline Execution (`app.Test(t)`)
     - Fluent Request Builder (`WithToken`, `WithJSON`, `WithForm`, `WithFile`)
     - Deep JSON Path, Predicate, and Error Bag Assertions
     - HTML & View Assertions (`AssertSee`, `AssertDontSee`, `AssertSeeInOrder`)
 
-17. **[Fluent HTTP Client & Mocking Engine (PRD §7)](./fluent-http-client.md)**
+19. **[Fluent HTTP Client & Mocking Engine (PRD §7)](./fluent-http-client.md)**
     - Expressive Request Chaining (`WithToken`, `WithHeaders`, `Timeout`, `Retry`)
     - Automatic JSON, Form, and Multipart File (`Attach`) Uploads
     - Comprehensive Mocking Engine (`Http.Fake()`, Sequences, Wildcards)
     - Test Assertions (`AssertSent`, `AssertSentCount`, `AssertNothingSent`)
 
-18. **[Prometheus, OpenTelemetry & Health Check Engine (PRD §9)](./telemetry-and-health-checks.md)**
+20. **[Prometheus, OpenTelemetry & Health Check Engine (PRD §9)](./telemetry-and-health-checks.md)**
     - Prometheus Metrics Exposition (`/metrics`) with Go Runtime Statistics
     - OpenTelemetry Distributed Tracing & W3C Trace Context Propagation (`traceparent`)
     - Multi-Subsystem Health Probes (`/health`, `/livez`, `/readyz`)
     - HTTP Observability Middlewares (`MetricsMiddleware`, `TraceMiddleware`)
     - Terminal Health Dashboard (`artisan health`)
 
-19. **[Artisan CLI Reference](./artisan-cli.md)**
+21. **[Artisan CLI Reference](./artisan-cli.md)**
     - Project Creation (`artisan new`)
     - Full-Stack CRUD Scaffolder (`artisan make:crud <Name>`) (PRD §8.2)
     - Database Migrations & Seeding (`migrate`, `migrate:diff`, `db:seed`, etc.)
     - Generator Commands (`make:crud`, `make:schema`, `make:controller`, `make:job`, `make:notification`, `make:scope`, etc.)
     - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`, `health`)
 
-20. **[Performance & Benchmarks](./benchmarks.md)**
+22. **[Performance & Benchmarks](./benchmarks.md)**
     - Zero-Allocation Architecture Methodology
     - Micro-benchmark Results vs Gin, Fiber, and Laravel Octane
