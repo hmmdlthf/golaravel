@@ -107,9 +107,36 @@ walk:
 		// Make new node a child of this node
 		if i < len(path) {
 			path = path[i:]
+			c := path[0]
+
+			// Check if a static child with the next path byte exists
+			for j := 0; j < len(n.indices); j++ {
+				if c == n.indices[j] {
+					j = n.incrementPriority(j)
+					n = n.children[j]
+					continue walk
+				}
+			}
+
+			// If adding a static child
+			if c != ':' && c != '*' {
+				n.indices += string([]byte{c})
+				child := &node{}
+				n.children = append(n.children, child)
+				n.incrementPriority(len(n.indices) - 1)
+				n = child
+				n.insertChild(path, fullPath, handlers)
+				return
+			}
 
 			if n.wildChild {
-				n = n.children[0]
+				// find wildcard child
+				for _, ch := range n.children {
+					if ch.nType == paramNode || ch.nType == catchAllNode {
+						n = ch
+						break
+					}
+				}
 				n.priority++
 
 				// Check if the wildcard matches
@@ -121,25 +148,6 @@ walk:
 				panic("wildcard conflict in path '" + fullPath + "'")
 			}
 
-			c := path[0]
-
-			// Check if a child with the next path byte exists
-			for j := 0; j < len(n.indices); j++ {
-				if c == n.indices[j] {
-					j = n.incrementPriority(j)
-					n = n.children[j]
-					continue walk
-				}
-			}
-
-			// Otherwise insert it
-			if c != ':' && c != '*' {
-				n.indices += string([]byte{c})
-				child := &node{}
-				n.children = append(n.children, child)
-				n.incrementPriority(len(n.indices) - 1)
-				n = child
-			}
 			n.insertChild(path, fullPath, handlers)
 			return
 		}
@@ -184,7 +192,7 @@ func (n *node) insertChild(path, fullPath string, handlers []context.HandlerFunc
 				path:      wildcard,
 				paramName: wildcard[1:],
 			}
-			n.children = []*node{child}
+			n.children = append(n.children, child)
 			n.wildChild = true
 			n = child
 			n.priority++
@@ -253,21 +261,32 @@ walk:
 			if path[:len(prefix)] == prefix {
 				path = path[len(prefix):]
 
-				// If this node does not have a wildcard child, search next static child
-				if !n.wildChild {
-					cByte := path[0]
-					for i := 0; i < len(n.indices); i++ {
-						if cByte == n.indices[i] {
-							n = n.children[i]
-							continue walk
-						}
+				// Check static children first before checking wildcard
+				cByte := path[0]
+				for i := 0; i < len(n.indices); i++ {
+					if cByte == n.indices[i] {
+						n = n.children[i]
+						continue walk
 					}
+				}
+
+				if !n.wildChild {
 					// Nothing found
 					return nil
 				}
 
-				// Handle wildcard child
-				n = n.children[0]
+				// Find wildcard child
+				var wildNode *node
+				for _, ch := range n.children {
+					if ch.nType == paramNode || ch.nType == catchAllNode {
+						wildNode = ch
+						break
+					}
+				}
+				if wildNode == nil {
+					return nil
+				}
+				n = wildNode
 				switch n.nType {
 				case paramNode:
 					// Find end of parameter (delimited by '/')
