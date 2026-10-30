@@ -65,7 +65,13 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
    - Authorization Gates & Policies
    - Built-in Middlewares (CSRF, CORS, RateLimiter, SecureHeaders)
 
-10. **[Queues & Task Scheduling](./queues-and-scheduling.md)**
+10. **[Stateful Sessions & Flash Messages (PRD §3.3)](./stateful-sessions-and-flash.md)**
+    - AES-256-GCM Encrypted Cookie Sessions
+    - Storage Drivers (Cookie, Memory, File)
+    - One-Request Flash Messages (`session.Flash`)
+    - Session-Backed CSRF Verification (`VerifyCSRFToken`)
+
+11. **[Queues & Task Scheduling](./queues-and-scheduling.md)**
     - Async Background Jobs (`queue.Push`)
     - Scalable Worker Pools (`artisan queue:work`)
     - In-Process Fluent Cron Scheduler (`schedule.DailyAt`, `Hourly`)

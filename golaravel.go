@@ -17,6 +17,7 @@ import (
 	"github.com/golaravel/golaravel/pkg/queue"
 	"github.com/golaravel/golaravel/pkg/router"
 	"github.com/golaravel/golaravel/pkg/schedule"
+	"github.com/golaravel/golaravel/pkg/session"
 	"github.com/golaravel/golaravel/pkg/storage"
 	"github.com/golaravel/golaravel/pkg/validation"
 )
@@ -35,6 +36,7 @@ type (
 	Message         = mail.Message
 	SoftDeleteMixin = privacy.SoftDeleteMixin
 	TenantMixin     = privacy.TenantMixin
+	SessionState    = session.Session
 )
 
 // New initializes a bare GoLaravel application.
@@ -222,5 +224,28 @@ var (
 		OnlyTrashed:           privacy.OnlyTrashed,
 		WithForceDelete:       privacy.WithForceDelete,
 		TenantMiddleware:      privacy.TenantMiddleware,
+	}
+
+	// Session provides access to stateful sessions, flash messages, and CSRF protection
+	Session = struct {
+		Get          func(c *context.Context, key string, defaultVal ...any) any
+		GetString    func(c *context.Context, key string, defaultVal ...string) string
+		Put          func(c *context.Context, key string, value any)
+		Flash        func(c *context.Context, key string, value any)
+		Has          func(c *context.Context, key string) bool
+		Token        func(c *context.Context) string
+		FromContext  func(c *context.Context) *session.Session
+		StartSession func(manager ...*session.Manager) context.HandlerFunc
+		VerifyCSRF   func() context.HandlerFunc
+	}{
+		Get:          session.Get,
+		GetString:    session.GetString,
+		Put:          session.Put,
+		Flash:        session.Flash,
+		Has:          session.Has,
+		Token:        session.Token,
+		FromContext:  session.FromContext,
+		StartSession: session.StartSession,
+		VerifyCSRF:   session.VerifyCSRFToken,
 	}
 )

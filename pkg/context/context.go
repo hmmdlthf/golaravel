@@ -31,6 +31,7 @@ type ResponseWriter struct {
 	status  int
 	size    int64
 	written bool
+	before  []func()
 }
 
 // Reset resets the ResponseWriter with a new http.ResponseWriter.
@@ -39,6 +40,12 @@ func (rw *ResponseWriter) Reset(w http.ResponseWriter) {
 	rw.status = http.StatusOK
 	rw.size = 0
 	rw.written = false
+	rw.before = rw.before[:0]
+}
+
+// Before registers a function to be executed just before response headers are written.
+func (rw *ResponseWriter) Before(fn func()) {
+	rw.before = append(rw.before, fn)
 }
 
 // Status returns the HTTP response status code.
@@ -59,6 +66,10 @@ func (rw *ResponseWriter) Written() bool {
 // WriteHeader sends the HTTP status code to the client.
 func (rw *ResponseWriter) WriteHeader(code int) {
 	if !rw.written {
+		for _, fn := range rw.before {
+			fn()
+		}
+		rw.before = nil
 		rw.status = code
 		rw.written = true
 		rw.ResponseWriter.WriteHeader(code)

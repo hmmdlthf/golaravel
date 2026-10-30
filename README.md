@@ -65,6 +65,7 @@ golaravel/
 │   ├── broadcast/          # Realtime WebSockets & SSE broadcasting with Ent hooks
 │   ├── notification/       # Multi-channel notifications (Mail, DB, Broadcast, Slack, SMS)
 │   ├── privacy/            # Multi-tenancy isolation scopes, soft deletes, and mixins
+│   ├── session/            # Encrypted stateful sessions, flash messages, and CSRF tokens
 │   ├── config/             # Multi-environment config loader (.env, typed getters)
 │   ├── database/           # High-concurrency connection pools, Atlas migrations & Seeders
 │   └── artisan/            # Artisan command registry & generators
@@ -101,6 +102,7 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - ⚛️ **[Inertia.js Protocol Adapter](./docs/inertia.md)**
 - 🛡️ **[Validation & Form Requests](./docs/validation-and-form-requests.md)**
 - 🔒 **[Authentication & Security](./docs/authentication-and-security.md)**
+- 🍪 **[Stateful Sessions & Flash Messages](./docs/stateful-sessions-and-flash.md)**
 - ⏱️ **[Queues & Task Scheduling](./docs/queues-and-scheduling.md)**
 - 📡 **[Realtime WebSockets & SSE Broadcasting](./docs/realtime-broadcasting.md)**
 - 🔔 **[Multi-Channel Notifications Engine](./docs/notifications.md)**
