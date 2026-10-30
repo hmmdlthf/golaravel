@@ -4,6 +4,7 @@ import (
 	stdContext "context"
 
 	"github.com/golaravel/golaravel/pkg/auth"
+	"github.com/golaravel/golaravel/pkg/broadcast"
 	"github.com/golaravel/golaravel/pkg/cache"
 	"github.com/golaravel/golaravel/pkg/config"
 	"github.com/golaravel/golaravel/pkg/context"
@@ -139,5 +140,18 @@ var (
 		Claims: auth.Claims,
 		Define: auth.Define,
 		Allows: auth.Allows,
+	}
+
+	// Broadcast provides access to real-time WebSockets & SSE broadcasting
+	Broadcast = struct {
+		Broadcast        func(channel, event string, data map[string]any)
+		Subscribe        func(channel string) (<-chan *broadcast.Message, func())
+		WebSocketHandler func(h ...*broadcast.Hub) context.HandlerFunc
+		SSEHandler       func(h ...*broadcast.Hub) context.HandlerFunc
+	}{
+		Broadcast:        broadcast.Broadcast,
+		Subscribe:        broadcast.Subscribe,
+		WebSocketHandler: broadcast.WebSocketHandler,
+		SSEHandler:       broadcast.SSEHandler,
 	}
 )

@@ -97,6 +97,7 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - 🛡️ **[Validation & Form Requests](./docs/validation-and-form-requests.md)**
 - 🔒 **[Authentication & Security](./docs/authentication-and-security.md)**
 - ⏱️ **[Queues & Task Scheduling](./docs/queues-and-scheduling.md)**
+- 📡 **[Realtime WebSockets & SSE Broadcasting](./docs/realtime-broadcasting.md)**
 - 🛠️ **[Artisan CLI Reference](./docs/artisan-cli.md)**
 - 📊 **[Performance Benchmarks](./docs/benchmarks.md)**
 

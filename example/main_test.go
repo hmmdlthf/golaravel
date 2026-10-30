@@ -15,6 +15,7 @@ import (
 	"github.com/golaravel/golaravel/example/app"
 	"github.com/golaravel/golaravel/example/app/handlers"
 	"github.com/golaravel/golaravel/pkg/auth"
+	"github.com/golaravel/golaravel/pkg/broadcast"
 	"github.com/golaravel/golaravel/pkg/container"
 	"github.com/golaravel/golaravel/pkg/flutter"
 	"github.com/golaravel/golaravel/pkg/golaravel"
@@ -71,6 +72,9 @@ func setupTestApp(t *testing.T) (*golaravel.Engine, *app.Client, string) {
 	engine := golaravel.New()
 	engine.Use(middleware.Recovery())
 
+	// Attach real-time Ent mutation hook for live updates
+	client.Invoice.Use(broadcast.EntMutationHook("invoices"))
+
 	container.Instance(engine.Container, client)
 	container.Instance(engine.Container, jwt)
 	handlers.RegisterInvoiceController(engine.Container, jwt)
@@ -82,6 +86,8 @@ func setupTestApp(t *testing.T) (*golaravel.Engine, *app.Client, string) {
 	api.GET("/invoices", ctrl.ApiList)
 	api.POST("/invoices", ctrl.ApiStore)
 	api.PATCH("/invoices/:id/pay", ctrl.ApiPay)
+	api.GET("/ws", broadcast.WebSocketHandler())
+	api.GET("/broadcast/sse", broadcast.SSEHandler())
 
 	flutter.ServeWeb(engine.Router, flutter.Options{
 		MountPath:   "/app",
@@ -141,6 +147,10 @@ func TestShowcase_E2E(t *testing.T) {
 	}
 
 	// 4. Test Create Invoice API with validation & transaction
+	// Subscribe to invoices channel to verify Ent model mutation hook dispatches realtime broadcast
+	msgChan, unsub := broadcast.Subscribe("invoices")
+	defer unsub()
+
 	createPayload := []byte(`{
 		"customer_name": "New Corp",
 		"customer_email": "billing@newcorp.com",
@@ -156,6 +166,16 @@ func TestShowcase_E2E(t *testing.T) {
 
 	if w4.Code != http.StatusCreated {
 		t.Fatalf("expected 201 Created, got %d: %s", w4.Code, w4.Body.String())
+	}
+
+	// Verify realtime event was broadcasted by Ent hook
+	select {
+	case msg := <-msgChan:
+		if msg.Event != "invoice.created" {
+			t.Fatalf("expected invoice.created event from Ent hook, got: %s", msg.Event)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("expected realtime Ent hook broadcast message on channel 'invoices'")
 	}
 
 	// 5. Test Flutter Web hosting

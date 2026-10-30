@@ -15,6 +15,7 @@ import (
 	"github.com/golaravel/golaravel/example/app/handlers"
 	"github.com/golaravel/golaravel/pkg/artisan"
 	"github.com/golaravel/golaravel/pkg/auth"
+	"github.com/golaravel/golaravel/pkg/broadcast"
 	"github.com/golaravel/golaravel/pkg/container"
 	gcontext "github.com/golaravel/golaravel/pkg/context"
 	"github.com/golaravel/golaravel/pkg/flutter"
@@ -99,6 +100,11 @@ func main() {
 		SetTotal(1200.00).
 		Save(ctx)
 
+	// Attach Ent ORM real-time mutation hook:
+	// Automatically broadcasts invoice.created, invoice.updated, invoice.deleted
+	// across WebSockets and SSE to all connected clients!
+	client.Invoice.Use(broadcast.EntMutationHook("invoices"))
+
 	// 4. Initialize JWT Manager
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
@@ -131,6 +137,10 @@ func main() {
 	api.GET("/invoices", invoiceCtrl.ApiList).Name("api.invoices.list")
 	api.POST("/invoices", invoiceCtrl.ApiStore).Name("api.invoices.store")
 	api.PATCH("/invoices/:id/pay", invoiceCtrl.ApiPay).Name("api.invoices.pay")
+
+	// === REALTIME WEBSOCKETS & SSE BROADCASTING (PRD §5.3) ===
+	api.GET("/ws", broadcast.WebSocketHandler()).Name("api.ws")
+	api.GET("/broadcast/sse", broadcast.SSEHandler()).Name("api.broadcast.sse")
 
 	// === FLUTTER WEB HOSTING (SPA FALLBACK) ===
 	flutter.ServeWeb(appEngine.Router, flutter.Options{

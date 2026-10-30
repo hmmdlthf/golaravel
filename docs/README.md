@@ -58,11 +58,16 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
    - Scalable Worker Pools (`artisan queue:work`)
    - In-Process Fluent Cron Scheduler (`schedule.DailyAt`, `Hourly`)
 
-10. **[Artisan CLI Reference](./artisan-cli.md)**
+10. **[Realtime WebSockets & SSE Broadcasting (PRD §5.3)](./realtime-broadcasting.md)**
+    - Realtime Broadcasting Architecture (WebSockets vs SSE)
+    - Live Ent Model Mutation Hooks (`EntMutationHook`)
+    - Flutter and Browser Native Client Subscriptions
+
+11. **[Artisan CLI Reference](./artisan-cli.md)**
     - Project Creation (`artisan new`)
     - Generator Commands (`make:schema`, `make:controller`, `make:job`, etc.)
     - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`)
 
-11. **[Performance & Benchmarks](./benchmarks.md)**
+12. **[Performance & Benchmarks](./benchmarks.md)**
     - Zero-Allocation Architecture Methodology
     - Micro-benchmark Results vs Gin, Fiber, and Laravel Octane
