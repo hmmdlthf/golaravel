@@ -54,6 +54,9 @@ func main() {
 	appEngine.GET("/users", userCtrl.Index).Name("users.index")
 	appEngine.POST("/users", userCtrl.Store).Name("users.store")
 
+	// Hybrid Micro-SSR Route: Instant customer invoice without client JS
+	appEngine.GET("/invoice/:token", userCtrl.InvoiceAction).Name("invoice.show")
+
 	api := appEngine.Group("/api")
 	api.GET("/users", userCtrl.ApiIndex).Name("api.users.index")
 

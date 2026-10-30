@@ -259,6 +259,26 @@ func (c *Context) JSON(status int, v any) error {
 	return json.NewEncoder(&c.Response).Encode(v)
 }
 
+// InertiaRenderer defines an interface for rendering Inertia.js responses.
+type InertiaRenderer interface {
+	Render(c *Context, status int, component string, props map[string]any) error
+}
+
+var globalInertiaRenderer InertiaRenderer
+
+// SetInertiaRenderer sets the global Inertia adapter renderer.
+func SetInertiaRenderer(r InertiaRenderer) {
+	globalInertiaRenderer = r
+}
+
+// Inertia renders an Inertia.js component with props.
+func (c *Context) Inertia(status int, component string, props map[string]any) error {
+	if globalInertiaRenderer == nil {
+		return fmt.Errorf("inertia renderer not configured. Call inertia.New() and register it")
+	}
+	return globalInertiaRenderer.Render(c, status, component, props)
+}
+
 // Templ renders a templ.Component directly to the HTTP response.
 // templ compiles templates into pure Go code, achieving zero-reflection and zero-allocation streaming.
 func (c *Context) Templ(status int, cmp templ.Component) error {

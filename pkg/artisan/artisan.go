@@ -69,6 +69,12 @@ func (r *Registry) PrintHelp() {
 
 func (r *Registry) registerDefaults() {
 	r.Register(&Command{
+		Name:        "new",
+		Description: "Interactively create a new GoLaravel project (Templ, Inertia, or Flutter)",
+		Run:         RunNew,
+	})
+
+	r.Register(&Command{
 		Name:        "make:schema",
 		Description: "Create a new Ent database schema (app/schema/<name>.go)",
 		Run:         makeSchema,
@@ -96,6 +102,12 @@ func (r *Registry) registerDefaults() {
 		Name:        "generate",
 		Description: "Execute code generators (templ generate & ent generate)",
 		Run:         runGenerate,
+	})
+
+	r.Register(&Command{
+		Name:        "flutter:build",
+		Description: "Build Flutter Web assets into client/build/web for GoLaravel hosting",
+		Run:         runFlutterBuild,
 	})
 }
 
@@ -307,6 +319,30 @@ func runGenerate(args []string) error {
 	}
 
 	fmt.Println("\033[32mSUCCESS\033[0m All code generators executed successfully.")
+	return nil
+}
+
+func runFlutterBuild(args []string) error {
+	clientDir := "client"
+	if len(args) > 0 {
+		clientDir = args[0]
+	}
+
+	if _, err := os.Stat(clientDir); os.IsNotExist(err) {
+		return fmt.Errorf("flutter directory '%s' not found. Run artisan new to scaffold Flutter client", clientDir)
+	}
+
+	fmt.Printf("\033[34m==>\033[0m Building Flutter Web application in \033[1;37m%s\033[0m...\n", clientDir)
+	cmd := exec.Command("flutter", "build", "web", "--release")
+	cmd.Dir = clientDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("flutter build failed: %w", err)
+	}
+
+	fmt.Println("\033[32mSUCCESS\033[0m Flutter Web application built successfully in client/build/web.")
 	return nil
 }
 

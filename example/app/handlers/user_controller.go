@@ -27,6 +27,15 @@ func (ctrl *UserController) HomeAction(c *context.Context) error {
 	return c.Templ(http.StatusOK, views.Home())
 }
 
+// InvoiceAction renders a standalone customer invoice without downloading heavy client SPA bundles.
+func (ctrl *UserController) InvoiceAction(c *context.Context) error {
+	token := c.Param("token")
+	if token == "" {
+		token = "INV-2026-8891"
+	}
+	return c.Templ(http.StatusOK, views.Invoice(token, "Acme International Corp", 2499.00, true))
+}
+
 // Index renders the user directory HTML view.
 func (ctrl *UserController) Index(c *context.Context) error {
 	users, err := ctrl.client.User.Query().All(c.Context())
