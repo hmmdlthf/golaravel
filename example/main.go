@@ -139,9 +139,9 @@ func main() {
 		FallbackSPA: true,
 	})
 
-	// Redirect root / to /app (Flutter Dashboard)
+	// Redirect root / to /app/ (Flutter Dashboard)
 	appEngine.GET("/", func(c *gcontext.Context) error {
-		return c.Redirect(303, "/app")
+		return c.Redirect(303, "/app/")
 	}).Name("root")
 
 	// Print beautiful route table

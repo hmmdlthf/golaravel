@@ -1,6 +1,7 @@
 package flutter
 
 import (
+	"bytes"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -20,15 +21,31 @@ type Options struct {
 // DefaultOptions provides default settings for Flutter Web serving.
 func DefaultOptions() Options {
 	return Options{
-		MountPath:   "/",
+		MountPath:   "/app",
 		DistDir:     "client/build/web",
 		FallbackSPA: true,
 	}
 }
 
+// findDistDir searches for the Flutter Web build directory across common workspace locations.
+func findDistDir(configured string) string {
+	candidates := []string{
+		configured,
+		filepath.Join("example", "client", "build", "web"),
+		filepath.Join("client", "build", "web"),
+	}
+	for _, c := range candidates {
+		if c == "" {
+			continue
+		}
+		if info, err := os.Stat(filepath.Join(c, "index.html")); err == nil && !info.IsDir() {
+			return c
+		}
+	}
+	return configured
+}
+
 // ServeWeb registers routes to serve a Flutter Web build from GoLaravel.
-// It serves static files (main.dart.js, assets, canvaskit, etc.) and falls back to index.html for SPA routing,
-// while preserving all other API and Templ routes.
 func ServeWeb(r *router.Router, opts ...Options) {
 	config := DefaultOptions()
 	if len(opts) > 0 {
@@ -41,11 +58,38 @@ func ServeWeb(r *router.Router, opts ...Options) {
 	}
 	mount = strings.TrimSuffix(mount, "/")
 
-	dist := config.DistDir
-
+	dist := findDistDir(config.DistDir)
 	fileServer := http.FileServer(http.Dir(dist))
 
-	// Catch-all route for Flutter Web mount
+	serveIndex := func(c *context.Context) error {
+		indexPath := filepath.Join(dist, "index.html")
+		content, err := os.ReadFile(indexPath)
+		if err != nil {
+			return c.String(http.StatusNotFound, "Flutter Web index.html not found in: %s", dist)
+		}
+
+		// Adjust <base href="..."> if mounted under a sub-path like /app/
+		baseHref := "/"
+		if mount != "" {
+			baseHref = mount + "/"
+		}
+
+		if baseHref != "/" {
+			content = bytes.Replace(content, []byte(`<base href="/">`), []byte(`<base href="`+baseHref+`">`), 1)
+		}
+
+		c.SetHeader("Content-Type", "text/html; charset=utf-8")
+		return c.Bytes(http.StatusOK, "text/html; charset=utf-8", content)
+	}
+
+	// 1. If mounted on sub-path (e.g. /app), register /app to redirect to /app/
+	if mount != "" {
+		r.GET(mount, func(c *context.Context) error {
+			return c.Redirect(http.StatusMovedPermanently, mount+"/")
+		})
+	}
+
+	// 2. Catch-all route for Flutter Web (handles /app/, /app/main.dart.js, /app/settings, etc.)
 	routePath := mount + "/*filepath"
 	if mount == "" {
 		routePath = "/*filepath"
@@ -53,27 +97,28 @@ func ServeWeb(r *router.Router, opts ...Options) {
 
 	r.GET(routePath, func(c *context.Context) error {
 		reqPath := c.Param("filepath")
-		if reqPath == "" || reqPath == "/" {
-			reqPath = "index.html"
+		reqPath = strings.TrimPrefix(reqPath, "/")
+
+		if reqPath == "" || reqPath == "index.html" {
+			return serveIndex(c)
 		}
 
 		filePath := filepath.Join(dist, filepath.Clean("/"+reqPath))
 		info, err := os.Stat(filePath)
 
-		// If file exists and is not a directory, serve the static asset directly
+		// Serve static file if it exists on disk
 		if err == nil && !info.IsDir() {
-			http.StripPrefix(mount, fileServer).ServeHTTP(&c.Response, c.Request)
+			if mount != "" {
+				http.StripPrefix(mount, fileServer).ServeHTTP(&c.Response, c.Request)
+			} else {
+				fileServer.ServeHTTP(&c.Response, c.Request)
+			}
 			return nil
 		}
 
-		// Fallback to index.html for client-side Flutter routing (SPA)
+		// Fallback to index.html for Flutter client-side SPA routing
 		if config.FallbackSPA {
-			indexPath := filepath.Join(dist, "index.html")
-			if _, err := os.Stat(indexPath); err == nil {
-				c.SetHeader("Content-Type", "text/html; charset=utf-8")
-				http.ServeFile(&c.Response, c.Request, indexPath)
-				return nil
-			}
+			return serveIndex(c)
 		}
 
 		return c.String(http.StatusNotFound, "Flutter Web asset '%s' not found", reqPath)
