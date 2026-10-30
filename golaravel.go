@@ -13,6 +13,7 @@ import (
 	"github.com/golaravel/golaravel/pkg/hash"
 	"github.com/golaravel/golaravel/pkg/mail"
 	"github.com/golaravel/golaravel/pkg/notification"
+	"github.com/golaravel/golaravel/pkg/privacy"
 	"github.com/golaravel/golaravel/pkg/queue"
 	"github.com/golaravel/golaravel/pkg/router"
 	"github.com/golaravel/golaravel/pkg/schedule"
@@ -29,9 +30,11 @@ type (
 	RouteGroup  = router.RouteGroup
 	Validator   = validation.Validator
 	FormRequest = validation.FormRequest
-	ErrorBag    = validation.ErrorBag
-	Job         = queue.Job
-	Message     = mail.Message
+	ErrorBag        = validation.ErrorBag
+	Job             = queue.Job
+	Message         = mail.Message
+	SoftDeleteMixin = privacy.SoftDeleteMixin
+	TenantMixin     = privacy.TenantMixin
 )
 
 // New initializes a bare GoLaravel application.
@@ -198,5 +201,26 @@ var (
 		SendNow:    notification.SendNow,
 		SendNowOne: notification.SendNowOne,
 		OnDemand:   notification.OnDemand,
+	}
+
+	// Privacy provides access to multi-tenancy isolation and soft delete scopes
+	Privacy = struct {
+		WithTenantID     func(ctx stdContext.Context, tenantID string) stdContext.Context
+		TenantFromContext func(ctx stdContext.Context) (string, bool)
+		MustTenantFromContext func(ctx stdContext.Context) string
+		WithBypassTenancy func(ctx stdContext.Context) stdContext.Context
+		WithTrashed      func(ctx stdContext.Context) stdContext.Context
+		OnlyTrashed      func(ctx stdContext.Context) stdContext.Context
+		WithForceDelete  func(ctx stdContext.Context) stdContext.Context
+		TenantMiddleware func(resolvers ...privacy.TenantResolver) context.HandlerFunc
+	}{
+		WithTenantID:          privacy.WithTenantID,
+		TenantFromContext:     privacy.TenantFromContext,
+		MustTenantFromContext: privacy.MustTenantFromContext,
+		WithBypassTenancy:     privacy.WithBypassTenancy,
+		WithTrashed:           privacy.WithTrashed,
+		OnlyTrashed:           privacy.OnlyTrashed,
+		WithForceDelete:       privacy.WithForceDelete,
+		TenantMiddleware:      privacy.TenantMiddleware,
 	}
 )

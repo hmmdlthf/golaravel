@@ -64,6 +64,7 @@ golaravel/
 │   ├── mail/               # Fluent email builder (LogDriver, SMTP)
 │   ├── broadcast/          # Realtime WebSockets & SSE broadcasting with Ent hooks
 │   ├── notification/       # Multi-channel notifications (Mail, DB, Broadcast, Slack, SMS)
+│   ├── privacy/            # Multi-tenancy isolation scopes, soft deletes, and mixins
 │   ├── config/             # Multi-environment config loader (.env, typed getters)
 │   ├── database/           # High-concurrency connection pools, Atlas migrations & Seeders
 │   └── artisan/            # Artisan command registry & generators
@@ -94,6 +95,7 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - ⚡ **[Routing & Controllers](./docs/routing-and-controllers.md)**
 - 🗄️ **[Database & Ent ORM](./docs/database-and-ent.md)**
 - 🔄 **[Database Migrations & Seeding (via Atlas)](./docs/migrations-and-seeding.md)**
+- 🛡️ **[Multi-Tenancy Privacy Scopes & Soft Deletes](./docs/multi-tenancy-and-soft-deletes.md)**
 - 🎨 **[Templating with Templ (Blade Equivalent)](./docs/templ-views.md)**
 - 📱 **[Flutter Multiplatform & Hybrid Serving](./docs/flutter-multiplatform.md)**
 - ⚛️ **[Inertia.js Protocol Adapter](./docs/inertia.md)**
@@ -121,6 +123,7 @@ artisan make:job SendMail   # Create async background job
 artisan make:notification InvoicePaid # Create multi-channel notification
 artisan make:mail Welcome   # Create mailable email
 artisan make:policy Post    # Create authorization policy
+artisan make:scope Active   # Create global Ent query scope
 artisan make:view posts     # Create Templ view
 artisan make:middleware Auth# Create middleware
 

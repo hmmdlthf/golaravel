@@ -129,6 +129,12 @@ func (r *Registry) registerDefaults() {
 	})
 
 	r.Register(&Command{
+		Name:        "make:scope",
+		Description: "Create a global Ent query scope (app/scopes/<name>_scope.go)",
+		Run:         makeScope,
+	})
+
+	r.Register(&Command{
 		Name:        "make:migration",
 		Description: "Create a new Atlas versioned database migration (database/migrations/)",
 		Run:         makeMigration,
@@ -445,6 +451,50 @@ func RegisterAuthWorkflows(c *container.Container, r router.RouteRegistrar, secr
 		return err
 	}
 	fmt.Printf("\033[32mINFO\033[0m Turnkey Auth & TOTP 2FA scaffolding [%s] created successfully.\n", targetPath)
+	return nil
+}
+
+func makeScope(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("missing scope name. Usage: artisan make:scope <Name>")
+	}
+	name := strings.Title(args[0])
+	if !strings.HasSuffix(name, "Scope") {
+		name += "Scope"
+	}
+	filename := strings.ToLower(strings.TrimSuffix(name, "Scope")) + "_scope.go"
+	dir := filepath.Join("app", "scopes")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	targetPath := filepath.Join(dir, filename)
+
+	content := fmt.Sprintf(`package scopes
+
+import (
+	"context"
+
+	"github.com/golaravel/golaravel/pkg/privacy"
+)
+
+// %s enforces custom query constraints before execution.
+type %s[Q any] struct{}
+
+func New%s[Q any]() *%s[Q] {
+	return &%s[Q]{}
+}
+
+// Apply adds constraints to the query.
+func (s *%s[Q]) Apply(ctx context.Context, query Q) error {
+	// Add custom query filters here (e.g. status, region, role)
+	return nil
+}
+`, name, name, name, name, name, name)
+
+	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+		return err
+	}
+	fmt.Printf("\033[32mINFO\033[0m Scope [%s] created successfully.\n", targetPath)
 	return nil
 }
 

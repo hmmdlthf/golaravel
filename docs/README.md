@@ -32,7 +32,13 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
    - Migration Status & Rollbacks (`migrate:status`, `migrate:rollback`)
    - Hierarchical Database Seeding Engine (`artisan db:seed`, `make:seeder`)
 
-5. **[Templating with Templ (Blade Equivalent)](./templ-views.md)**
+5. **[Multi-Tenancy Privacy Scopes & Soft Deletes (PRD §2.3)](./multi-tenancy-and-soft-deletes.md)**
+   - Soft Delete Mixin & Interceptor (`withTrashed`, `onlyTrashed`, `forceDelete`)
+   - Multi-Tenant Privacy Scopes & Automatic Injection
+   - Modular HTTP Multi-Tenancy Middleware (Subdomain, Header, Param, JWT Claims)
+   - Custom Global Query Scopes (`artisan make:scope`)
+
+6. **[Templating with Templ (Blade Equivalent)](./templ-views.md)**
    - Why Templ Replaces Traditional Blade
    - Layout Components & Children
    - Blade-like Helpers (`@csrf`, `@method`)
