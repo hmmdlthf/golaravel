@@ -20,6 +20,9 @@ import (
 	"github.com/golaravel/golaravel/pkg/telemetry"
 )
 
+// Version is the current version of GoLaravel and Artisan CLI.
+const Version = "v1.0.0"
+
 // Command defines a CLI command in Artisan.
 type Command struct {
 	Name        string
@@ -53,6 +56,11 @@ func (r *Registry) Execute(args []string) error {
 		return nil
 	}
 
+	if args[0] == "version" || args[0] == "--version" || args[0] == "-v" || args[0] == "-V" {
+		fmt.Printf("GoLaravel Framework & Artisan CLI %s\n", Version)
+		return nil
+	}
+
 	cmdName := args[0]
 	cmd, exists := r.commands[cmdName]
 	if !exists {
@@ -77,6 +85,15 @@ func (r *Registry) PrintHelp() {
 }
 
 func (r *Registry) registerDefaults() {
+	r.Register(&Command{
+		Name:        "version",
+		Description: "Display the current GoLaravel and Artisan CLI version",
+		Run: func(args []string) error {
+			fmt.Printf("GoLaravel Framework & Artisan CLI %s\n", Version)
+			return nil
+		},
+	})
+
 	r.Register(&Command{
 		Name:        "new",
 		Description: "Interactively create a new GoLaravel project (Templ, Inertia, or Flutter)",

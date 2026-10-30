@@ -312,3 +312,14 @@ func TestMakeFactory_Scaffolding(t *testing.T) {
 		t.Errorf("factory file missing UserFactory constructor")
 	}
 }
+
+func TestArtisan_Version(t *testing.T) {
+	reg := NewRegistry()
+
+	// Test flag invocations
+	for _, flag := range []string{"version", "--version", "-v", "-V"} {
+		if err := reg.Execute([]string{flag}); err != nil {
+			t.Errorf("expected flag %s to succeed without error, got: %v", flag, err)
+		}
+	}
+}
