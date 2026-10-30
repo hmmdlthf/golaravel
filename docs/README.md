@@ -100,8 +100,9 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
 
 16. **[Artisan CLI Reference](./artisan-cli.md)**
     - Project Creation (`artisan new`)
+    - Full-Stack CRUD Scaffolder (`artisan make:crud <Name>`) (PRD §8.2)
     - Database Migrations & Seeding (`migrate`, `migrate:diff`, `db:seed`, etc.)
-    - Generator Commands (`make:schema`, `make:controller`, `make:job`, `make:notification`, `make:scope`, etc.)
+    - Generator Commands (`make:crud`, `make:schema`, `make:controller`, `make:job`, `make:notification`, `make:scope`, etc.)
     - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`)
 
 17. **[Performance & Benchmarks](./benchmarks.md)**

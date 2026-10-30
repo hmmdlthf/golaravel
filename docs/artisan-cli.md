@@ -20,10 +20,36 @@ artisan new my-billing-system
 
 ## 2. Generator Commands
 
+### `artisan make:crud <Name> [--api | --web] [--force]` (PRD §8.2)
+
+Scaffolds a complete full-stack CRUD resource end-to-end in seconds:
+- **Ent Database Schema**: `app/schema/<name>.go`
+- **Form Requests with Validation**: `app/requests/<name>_request.go`
+- **RESTful & Web Controller**: `app/handlers/<name>_controller.go` (Index, Show, Create, Store, Edit, Update, Destroy)
+- **Templ UI Views**: `app/views/<name>.templ` (Index Table, Show Detail, and Create/Edit Form with CSRF & method spoofing)
+- **Database Seeder**: `database/seeders/<name>_seeder.go`
+- **Route Mounting Helper**: `ctrl.RegisterRoutes(router, "/<names>")`
+
+```bash
+# Scaffold full-stack CRUD with Templ views
+artisan make:crud Product
+
+# Scaffold API-only CRUD (skip Templ views, JSON responses)
+artisan make:crud Order --api
+
+# Overwrite existing files
+artisan make:crud Customer --force
+```
+
+---
+
+### Individual Component Generators
+
 All generators place files in deterministic directories:
 
 | Command | Output Path | Description |
 |---|---|---|
+| `artisan make:crud <Name>` | Full Stack | Scaffolds Schema, Requests, Controller, Views, and Seeder |
 | `artisan make:schema <Name>` | `app/schema/<name>.go` | Creates an Ent ORM schema definition |
 | `artisan make:controller <Name>` | `app/handlers/<name>_controller.go` | Creates an HTTP controller |
 | `artisan make:view <name>` | `app/views/<name>.templ` | Creates a Templ component view |

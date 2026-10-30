@@ -93,6 +93,12 @@ func (r *Registry) registerDefaults() {
 	})
 
 	r.Register(&Command{
+		Name:        "make:crud",
+		Description: "Scaffold full-stack CRUD (Schema, Requests, Controller, Views, Seeder)",
+		Run:         makeCrud,
+	})
+
+	r.Register(&Command{
 		Name:        "make:middleware",
 		Description: "Create a new HTTP middleware",
 		Run:         makeMiddleware,
@@ -669,6 +675,10 @@ func (ctrl *%s) Show(c *context.Context) error {
 
 	fmt.Printf("\033[32mINFO\033[0m Controller [%s] created successfully.\n", targetPath)
 	return nil
+}
+
+func makeCrud(args []string) error {
+	return RunMakeCrud(args)
 }
 
 func makeMiddleware(args []string) error {
