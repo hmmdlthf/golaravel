@@ -1,0 +1,11 @@
+package view
+
+// CSRF generates the Laravel equivalent of @csrf: <input type="hidden" name="_token" value="...">
+templ CSRF(token string) {
+	<input type="hidden" name="_token" value={ token }/>
+}
+
+// Method generates the Laravel equivalent of @method('PUT'): <input type="hidden" name="_method" value="...">
+templ Method(method string) {
+	<input type="hidden" name="_method" value={ method }/>
+}

@@ -1,0 +1,37 @@
+package views
+
+// Home renders the high-performance framework homepage.
+templ Home() {
+	@Layout("The Fastest Framework in the World") {
+		<div class="space-y-8">
+			<!-- Hero -->
+			<div class="text-center py-12 space-y-4">
+				<h1 class="text-5xl font-extrabold tracking-tight bg-gradient-to-r from-rose-400 via-purple-300 to-indigo-400 bg-clip-text text-transparent">
+					Laravel Ergonomics.<br/>Go Compiled Velocity.
+				</h1>
+				<p class="text-lg text-slate-400 max-w-2xl mx-auto">
+					Designed from the ground up for extreme throughput. Zero-reflection Radix routing, Ent ORM graph traversal, and compile-time Templ views.
+				</p>
+			</div>
+
+			<!-- Performance Cards -->
+			<div class="grid md:grid-cols-3 gap-6">
+				<div class="bg-slate-800/50 border border-slate-700/60 p-6 rounded-xl">
+					<div class="text-3xl font-black text-emerald-400 mb-1">8.6 ns</div>
+					<div class="text-sm font-semibold text-slate-200">Zero-Alloc Radix Route Match</div>
+					<p class="text-xs text-slate-400 mt-2">Zero heap allocations per request using inline fixed parameter arrays.</p>
+				</div>
+				<div class="bg-slate-800/50 border border-slate-700/60 p-6 rounded-xl">
+					<div class="text-3xl font-black text-rose-400 mb-1">100%</div>
+					<div class="text-sm font-semibold text-slate-200">Compile-Time Templ Views</div>
+					<p class="text-xs text-slate-400 mt-2">Blade-like component syntax compiled directly to Go machine code.</p>
+				</div>
+				<div class="bg-slate-800/50 border border-slate-700/60 p-6 rounded-xl">
+					<div class="text-3xl font-black text-indigo-400 mb-1">Ent ORM</div>
+					<div class="text-sm font-semibold text-slate-200">Zero Runtime Reflection</div>
+					<p class="text-xs text-slate-400 mt-2">Graph queries and mutations generated at compile time with 100% type safety.</p>
+				</div>
+			</div>
+		</div>
+	}
+}

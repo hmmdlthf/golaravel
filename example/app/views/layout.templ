@@ -1,0 +1,40 @@
+package views
+
+// Layout provides the base HTML shell.
+templ Layout(title string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title } - GoLaravel</title>
+			<script src="https://cdn.tailwindcss.com"></script>
+		</head>
+		<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans">
+			<!-- Header -->
+			<header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+				<div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+					<div class="flex items-center space-x-3">
+						<span class="text-2xl font-black text-rose-500 tracking-tight">GoLaravel</span>
+						<span class="text-xs px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 font-semibold border border-rose-500/20">Ultra High Perf</span>
+					</div>
+					<nav class="flex space-x-6 text-sm font-medium text-slate-300">
+						<a href="/" class="hover:text-rose-400 transition-colors">Home</a>
+						<a href="/users" class="hover:text-rose-400 transition-colors">Users (Ent ORM)</a>
+						<a href="/api/users" class="hover:text-rose-400 transition-colors">JSON API</a>
+					</nav>
+				</div>
+			</header>
+
+			<!-- Content Area -->
+			<main class="flex-1 max-w-6xl w-full mx-auto px-4 py-8">
+				{ children... }
+			</main>
+
+			<!-- Footer -->
+			<footer class="border-t border-slate-800 py-6 text-center text-xs text-slate-500">
+				<p>GoLaravel &bull; Zero-Reflection &bull; Radix Trie &bull; Ent ORM &bull; Templ Engine</p>
+			</footer>
+		</body>
+	</html>
+}
