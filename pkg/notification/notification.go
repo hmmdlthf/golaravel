@@ -7,6 +7,15 @@ import (
 	"github.com/golaravel/golaravel/pkg/mail"
 )
 
+// Channel constants for built-in notification delivery channels.
+const (
+	ChannelMail      = "mail"
+	ChannelDatabase  = "database"
+	ChannelBroadcast = "broadcast"
+	ChannelSlack     = "slack"
+	ChannelSMS       = "sms"
+)
+
 // Notification defines the base interface all notifications must implement.
 type Notification interface {
 	// Via returns the channels the notification should be delivered on.

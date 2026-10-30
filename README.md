@@ -116,6 +116,7 @@ artisan flutter:build       # Compile Flutter Web into client/build/web
 # Scaffolding
 artisan make:schema Post    # Create Ent database schema
 artisan make:controller Post # Create controller
+artisan make:auth            # Scaffold turnkey auth & TOTP 2FA controller
 artisan make:job SendMail   # Create async background job
 artisan make:notification InvoicePaid # Create multi-channel notification
 artisan make:mail Welcome   # Create mailable email

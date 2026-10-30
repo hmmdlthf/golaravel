@@ -29,6 +29,7 @@ All generators place files in deterministic directories:
 | `artisan make:view <name>` | `app/views/<name>.templ` | Creates a Templ component view |
 | `artisan make:job <Name>` | `app/jobs/<name>_job.go` | Creates an async background queue job |
 | `artisan make:notification <Name>` | `app/notifications/<name>_notification.go` | Creates a multi-channel notification class |
+| `artisan make:auth` | `app/handlers/auth_workflow_controller.go` | Scaffolds turnkey auth workflows & TOTP 2FA controller |
 | `artisan make:mail <Name>` | `app/mail/<name>.go` | Creates a fluent Mailable email class |
 | `artisan make:policy <Name>` | `app/policies/<name>_policy.go` | Creates an authorization policy |
 | `artisan make:middleware <Name>`| `app/middleware/<name>.go` | Creates custom HTTP middleware |

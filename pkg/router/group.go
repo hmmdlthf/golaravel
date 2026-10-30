@@ -7,6 +7,16 @@ import (
 	"github.com/golaravel/golaravel/pkg/context"
 )
 
+// RouteRegistrar defines the common interface for registering routes on a Router or RouteGroup.
+type RouteRegistrar interface {
+	Group(prefix string, middlewares ...context.HandlerFunc) *RouteGroup
+	GET(path string, handlers ...context.HandlerFunc) *Route
+	POST(path string, handlers ...context.HandlerFunc) *Route
+	PUT(path string, handlers ...context.HandlerFunc) *Route
+	PATCH(path string, handlers ...context.HandlerFunc) *Route
+	DELETE(path string, handlers ...context.HandlerFunc) *Route
+}
+
 // RouteGroup represents a collection of routes sharing a path prefix and middleware chain.
 type RouteGroup struct {
 	router      *Router

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -32,21 +33,36 @@ type UserProvider interface {
 	FindByID(id string) (Authenticatable, error)
 }
 
+// AuthenticateBearer attempts to authenticate the request using a JWT Bearer header.
+func AuthenticateBearer(c *context.Context, jwt *JWTManager, provider ...UserProvider) (Authenticatable, *JWTClaims, error) {
+	authHeader := c.Header("Authorization")
+	if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		return nil, nil, errors.New("Bearer token missing or invalid")
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	claims, err := jwt.VerifyToken(tokenString)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var user Authenticatable = &SimpleUser{ID: claims.Sub}
+	if len(provider) > 0 && provider[0] != nil {
+		u, err := provider[0].FindByID(claims.Sub)
+		if err != nil || u == nil {
+			return nil, nil, errors.New("User not found")
+		}
+		user = u
+	}
+
+	return user, claims, nil
+}
+
 // BearerGuard returns a high-performance JWT bearer token authentication middleware.
 // Ideal for Flutter (Mobile, Desktop, Web) and API clients.
 func BearerGuard(jwt *JWTManager, provider ...UserProvider) context.HandlerFunc {
 	return func(c *context.Context) error {
-		authHeader := c.Header("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-			c.AbortWithStatus(http.StatusUnauthorized)
-			return c.JSON(http.StatusUnauthorized, map[string]string{
-				"error":   "Unauthorized",
-				"message": "Bearer token missing or invalid",
-			})
-		}
-
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		claims, err := jwt.VerifyToken(tokenString)
+		user, claims, err := AuthenticateBearer(c, jwt, provider...)
 		if err != nil {
 			c.AbortWithStatus(http.StatusUnauthorized)
 			return c.JSON(http.StatusUnauthorized, map[string]string{
@@ -56,21 +72,7 @@ func BearerGuard(jwt *JWTManager, provider ...UserProvider) context.HandlerFunc 
 		}
 
 		c.Set(ContextTokenKey, claims)
-
-		if len(provider) > 0 && provider[0] != nil {
-			user, err := provider[0].FindByID(claims.Sub)
-			if err != nil || user == nil {
-				c.AbortWithStatus(http.StatusUnauthorized)
-				return c.JSON(http.StatusUnauthorized, map[string]string{
-					"error":   "Unauthorized",
-					"message": "User not found",
-				})
-			}
-			c.Set(ContextUserKey, user)
-		} else {
-			c.Set(ContextUserKey, &SimpleUser{ID: claims.Sub})
-		}
-
+		c.Set(ContextUserKey, user)
 		return c.Next()
 	}
 }

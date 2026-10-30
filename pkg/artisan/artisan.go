@@ -123,6 +123,12 @@ func (r *Registry) registerDefaults() {
 	})
 
 	r.Register(&Command{
+		Name:        "make:auth",
+		Description: "Scaffold turnkey authentication workflows and TOTP 2FA controller",
+		Run:         makeAuth,
+	})
+
+	r.Register(&Command{
 		Name:        "make:migration",
 		Description: "Create a new Atlas versioned database migration (database/migrations/)",
 		Run:         makeMigration,
@@ -390,6 +396,55 @@ func (n *%s) ToBroadcast(notifiable notification.Notifiable) (*broadcast.Message
 		return err
 	}
 	fmt.Printf("\033[32mINFO\033[0m Notification [%s] created successfully.\n", targetPath)
+	return nil
+}
+
+func makeAuth(args []string) error {
+	dir := filepath.Join("app", "handlers")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	targetPath := filepath.Join(dir, "auth_workflow_controller.go")
+
+	content := `package handlers
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/golaravel/golaravel/pkg/auth"
+	"github.com/golaravel/golaravel/pkg/container"
+	"github.com/golaravel/golaravel/pkg/router"
+)
+
+// RegisterAuthWorkflows scaffolds and mounts turnkey auth, password reset, and TOTP 2FA endpoints.
+func RegisterAuthWorkflows(c *container.Container, r router.RouteRegistrar, secretKey string) *auth.WorkflowController {
+	ctrl := auth.NewWorkflowController(auth.WorkflowConfig{
+		SecretKey: secretKey,
+		AppName:   "GoLaravel App",
+		AppURL:    "http://localhost:8080",
+		Callbacks: auth.WorkflowCallbacks{
+			// Wire to your Ent client or custom database queries:
+			FindByEmail: func(ctx context.Context, email string) (auth.AuthenticatableUser, error) {
+				// e.g. return client.User.Query().Where(user.EmailEQ(email)).Only(ctx)
+				return nil, fmt.Errorf("implement FindByEmail with your database client")
+			},
+			FindByID: func(ctx context.Context, id string) (auth.AuthenticatableUser, error) {
+				// e.g. return client.User.Get(ctx, parsedID)
+				return nil, fmt.Errorf("implement FindByID with your database client")
+			},
+		},
+	})
+
+	ctrl.RegisterRoutes(r, "/auth")
+	return ctrl
+}
+`
+
+	if err := os.WriteFile(targetPath, []byte(content), 0644); err != nil {
+		return err
+	}
+	fmt.Printf("\033[32mINFO\033[0m Turnkey Auth & TOTP 2FA scaffolding [%s] created successfully.\n", targetPath)
 	return nil
 }
 

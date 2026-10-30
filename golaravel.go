@@ -157,15 +157,19 @@ var (
 
 	// Auth provides access to authentication helpers
 	Auth = struct {
-		User   func(c *context.Context) auth.Authenticatable
-		Claims func(c *context.Context) *auth.JWTClaims
-		Define func(ability string, fn auth.GateFunc)
-		Allows func(ability string, user auth.Authenticatable, args ...any) bool
+		User       func(c *context.Context) auth.Authenticatable
+		Claims     func(c *context.Context) *auth.JWTClaims
+		Define     func(ability string, fn auth.GateFunc)
+		Allows     func(ability string, user auth.Authenticatable, args ...any) bool
+		TOTP       func(opts ...auth.TOTPOptions) *auth.TOTPManager
+		MultiGuard func(guards ...auth.GuardFunc) context.HandlerFunc
 	}{
-		User:   auth.User,
-		Claims: auth.Claims,
-		Define: auth.Define,
-		Allows: auth.Allows,
+		User:       auth.User,
+		Claims:     auth.Claims,
+		Define:     auth.Define,
+		Allows:     auth.Allows,
+		TOTP:       auth.NewTOTPManager,
+		MultiGuard: auth.MultiGuard,
 	}
 
 	// Broadcast provides access to real-time WebSockets & SSE broadcasting

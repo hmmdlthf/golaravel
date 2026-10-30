@@ -218,6 +218,32 @@ func (c *Context) Header(key string) string {
 	return c.Request.Header.Get(key)
 }
 
+// Cookie retrieves the named cookie from the HTTP request.
+func (c *Context) Cookie(name string) (string, error) {
+	cookie, err := c.Request.Cookie(name)
+	if err != nil {
+		return "", err
+	}
+	return cookie.Value, nil
+}
+
+// SetCookie adds a Set-Cookie header to the HTTP response.
+func (c *Context) SetCookie(name, value string, maxAge int, path, domain string, secure, httpOnly bool) {
+	if path == "" {
+		path = "/"
+	}
+	http.SetCookie(c.Response.ResponseWriter, &http.Cookie{
+		Name:     name,
+		Value:    value,
+		MaxAge:   maxAge,
+		Path:     path,
+		Domain:   domain,
+		Secure:   secure,
+		HttpOnly: httpOnly,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
 // SetHeader sets a response header.
 func (c *Context) SetHeader(key, value string) {
 	c.Response.Header().Set(key, value)
