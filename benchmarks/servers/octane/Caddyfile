@@ -1,0 +1,17 @@
+{
+	admin off
+	frankenphp {
+		worker {
+			file "benchmarks/servers/octane/worker.php"
+			num 16
+		}
+	}
+}
+
+:9004 {
+	root * benchmarks/servers/octane
+	route {
+		try_files {path} /worker.php
+		php_server
+	}
+}
