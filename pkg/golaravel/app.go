@@ -10,12 +10,14 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"testing"
 	"time"
 
 	"github.com/golaravel/golaravel/pkg/container"
 	gcontext "github.com/golaravel/golaravel/pkg/context"
 	"github.com/golaravel/golaravel/pkg/middleware"
 	"github.com/golaravel/golaravel/pkg/router"
+	gltest "github.com/golaravel/golaravel/pkg/testing"
 )
 
 // ServiceProvider defines the lifecycle contract for modular framework packages.
@@ -95,6 +97,11 @@ func (app *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Recycle Context back to pool
 	app.pool.Put(c)
+}
+
+// Test creates an HTTP test harness client directly against this Engine with zero network overhead.
+func (app *Engine) Test(t testing.TB) *gltest.TestClient {
+	return gltest.New(t, app)
 }
 
 // Run starts the HTTP server with graceful shutdown handling.

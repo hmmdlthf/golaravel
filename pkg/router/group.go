@@ -15,6 +15,12 @@ type RouteRegistrar interface {
 	PUT(path string, handlers ...context.HandlerFunc) *Route
 	PATCH(path string, handlers ...context.HandlerFunc) *Route
 	DELETE(path string, handlers ...context.HandlerFunc) *Route
+
+	Get(path string, handlers ...context.HandlerFunc) *Route
+	Post(path string, handlers ...context.HandlerFunc) *Route
+	Put(path string, handlers ...context.HandlerFunc) *Route
+	Patch(path string, handlers ...context.HandlerFunc) *Route
+	Delete(path string, handlers ...context.HandlerFunc) *Route
 }
 
 // RouteGroup represents a collection of routes sharing a path prefix and middleware chain.
@@ -82,6 +88,12 @@ func (rg *RouteGroup) DELETE(path string, handlers ...context.HandlerFunc) *Rout
 func (rg *RouteGroup) OPTIONS(path string, handlers ...context.HandlerFunc) *Route {
 	return rg.Handle("OPTIONS", path, handlers...)
 }
+
+func (rg *RouteGroup) Get(path string, handlers ...context.HandlerFunc) *Route    { return rg.GET(path, handlers...) }
+func (rg *RouteGroup) Post(path string, handlers ...context.HandlerFunc) *Route   { return rg.POST(path, handlers...) }
+func (rg *RouteGroup) Put(path string, handlers ...context.HandlerFunc) *Route    { return rg.PUT(path, handlers...) }
+func (rg *RouteGroup) Patch(path string, handlers ...context.HandlerFunc) *Route  { return rg.PATCH(path, handlers...) }
+func (rg *RouteGroup) Delete(path string, handlers ...context.HandlerFunc) *Route { return rg.DELETE(path, handlers...) }
 
 func (rg *RouteGroup) calculatePath(relativePath string) string {
 	if relativePath == "" {

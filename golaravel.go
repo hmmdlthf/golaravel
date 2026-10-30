@@ -4,6 +4,8 @@ import (
 	stdContext "context"
 	"io"
 	"mime/multipart"
+	"net/http"
+	"testing"
 	"time"
 
 	"github.com/golaravel/golaravel/pkg/auth"
@@ -22,6 +24,7 @@ import (
 	"github.com/golaravel/golaravel/pkg/schedule"
 	"github.com/golaravel/golaravel/pkg/session"
 	"github.com/golaravel/golaravel/pkg/storage"
+	gltest "github.com/golaravel/golaravel/pkg/testing"
 	"github.com/golaravel/golaravel/pkg/validation"
 )
 
@@ -41,7 +44,15 @@ type (
 	TenantMixin     = privacy.TenantMixin
 	SessionState    = session.Session
 	StorageDriver   = storage.Driver
+	TestClient      = gltest.TestClient
+	TestResponse    = gltest.TestResponse
+	TestRequest     = gltest.TestRequestBuilder
 )
+
+// Test creates a high-performance HTTP test harness client directly against any http.Handler or GoLaravel Engine.
+func Test(t testing.TB, app http.Handler) *gltest.TestClient {
+	return gltest.New(t, app)
+}
 
 // New initializes a bare GoLaravel application.
 func New() *Engine {

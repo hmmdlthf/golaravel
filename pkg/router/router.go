@@ -140,6 +140,15 @@ func (r *Router) HEAD(path string, handlers ...context.HandlerFunc) *Route {
 	return r.Handle(http.MethodHead, path, handlers...)
 }
 
+// Title-case aliases for ergonomic route definition
+func (r *Router) Get(path string, handlers ...context.HandlerFunc) *Route     { return r.GET(path, handlers...) }
+func (r *Router) Post(path string, handlers ...context.HandlerFunc) *Route    { return r.POST(path, handlers...) }
+func (r *Router) Put(path string, handlers ...context.HandlerFunc) *Route     { return r.PUT(path, handlers...) }
+func (r *Router) Patch(path string, handlers ...context.HandlerFunc) *Route   { return r.PATCH(path, handlers...) }
+func (r *Router) Delete(path string, handlers ...context.HandlerFunc) *Route  { return r.DELETE(path, handlers...) }
+func (r *Router) Options(path string, handlers ...context.HandlerFunc) *Route { return r.OPTIONS(path, handlers...) }
+func (r *Router) Head(path string, handlers ...context.HandlerFunc) *Route    { return r.HEAD(path, handlers...) }
+
 // Any registers a route for all common HTTP methods.
 func (r *Router) Any(path string, handlers ...context.HandlerFunc) {
 	methods := []string{

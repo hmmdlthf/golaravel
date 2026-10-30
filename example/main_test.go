@@ -229,3 +229,52 @@ func TestShowcase_E2E(t *testing.T) {
 		t.Errorf("expected notification type InvoicePaid, got %s", unreadNotifs[0].Type)
 	}
 }
+
+func TestE2E_WithGoLaravelTestingHarness(t *testing.T) {
+	engine, _, sampleToken := setupTestApp(t)
+
+	// 1. Fluent public Templ SSR view test
+	engine.Test(t).
+		Get("/invoice/" + sampleToken).
+		AssertOK().
+		AssertContentType("text/html").
+		AssertSee("INV-TEST-001").
+		AssertSee("Test Customer Corp").
+		AssertDontSee("Internal Server Error")
+
+	// 2. Fluent Route Model Binding 404
+	engine.Test(t).
+		Get("/invoice/non-existent-token").
+		AssertNotFound()
+
+	// 3. Fluent JSON authentication
+	res := engine.Test(t).
+		PostJSON("/api/auth/login", map[string]string{
+			"email":    "admin@example.com",
+			"password": "password123",
+		}).
+		AssertOK().
+		AssertHeader("Content-Type", "application/json; charset=utf-8").
+		AssertJsonPath("token", func(v any) bool { return v != "" })
+
+	var loginData struct {
+		Token string `json:"token"`
+	}
+	_ = res.DecodeJson(&loginData)
+
+	// 4. Invoices list with Bearer token
+	engine.Test(t).
+		WithToken(loginData.Token).
+		Get("/api/invoices").
+		AssertOK().
+		AssertJsonCount(1).
+		AssertJsonPath("0.customer_name", "Test Customer Corp")
+
+	// 5. Create invoice with validation error on empty payload
+	engine.Test(t).
+		WithToken(loginData.Token).
+		PostJSON("/api/invoices", map[string]any{}).
+		AssertUnprocessable().
+		AssertJsonValidationErrors("customer_name", "customer_email")
+}
+
