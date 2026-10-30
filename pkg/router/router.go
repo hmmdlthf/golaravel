@@ -154,6 +154,15 @@ func (r *Router) Match(method, path string, c *context.Context) []context.Handle
 			return handlers
 		}
 	}
+	// Fallback for HEAD requests to match GET routes
+	if method == http.MethodHead {
+		if root := r.trees[http.MethodGet]; root != nil {
+			handlers := root.getValue(path, c)
+			if handlers != nil {
+				return handlers
+			}
+		}
+	}
 	return nil
 }
 
