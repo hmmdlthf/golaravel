@@ -302,8 +302,16 @@ walk:
 
 					// We need to go deeper!
 					if end < len(path) {
+						subPath := path[end:]
+						for _, ch := range n.children {
+							if len(subPath) >= len(ch.path) && subPath[:len(ch.path)] == ch.path {
+								path = subPath
+								n = ch
+								continue walk
+							}
+						}
 						if len(n.children) > 0 {
-							path = path[end:]
+							path = subPath
 							n = n.children[0]
 							continue walk
 						}

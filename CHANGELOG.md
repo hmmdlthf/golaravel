@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.0.2] - 2026-10-31
+
+### Fixed
+- **Zero-Allocation Radix Router Multi-Child Branching (`pkg/router/tree.go`)**:
+  - Fixed route lookup on parameterized paths with multiple distinct static suffixes (e.g. `/:id/edit` and `/:id/delete`).
+  - Search matching child prefix when transitioning past parameter delimiters instead of unconditionally falling back to first child.
+
+---
+
 ## [v1.0.1] - 2026-10-31
 
 ### Fixed
