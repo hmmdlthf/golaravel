@@ -68,6 +68,7 @@ golaravel/
 │   ├── session/            # Encrypted stateful sessions, flash messages, and CSRF tokens
 │   ├── config/             # Multi-environment config loader (.env, typed getters)
 │   ├── database/           # High-concurrency connection pools, Atlas migrations & Seeders
+│   ├── http/               # Fluent outbound HTTP client & mocking engine (Http::fake)
 │   ├── testing/            # Full-stack HTTP testing harness & assertion toolkit
 │   └── artisan/            # Artisan command registry & generators
 ├── example/                # Full reference app (Ent ORM + Templ + Flutter Hybrid)

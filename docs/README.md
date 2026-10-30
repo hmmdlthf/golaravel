@@ -104,13 +104,19 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
     - Deep JSON Path, Predicate, and Error Bag Assertions
     - HTML & View Assertions (`AssertSee`, `AssertDontSee`, `AssertSeeInOrder`)
 
-17. **[Artisan CLI Reference](./artisan-cli.md)**
+17. **[Fluent HTTP Client & Mocking Engine (PRD §7)](./fluent-http-client.md)**
+    - Expressive Request Chaining (`WithToken`, `WithHeaders`, `Timeout`, `Retry`)
+    - Automatic JSON, Form, and Multipart File (`Attach`) Uploads
+    - Comprehensive Mocking Engine (`Http.Fake()`, Sequences, Wildcards)
+    - Test Assertions (`AssertSent`, `AssertSentCount`, `AssertNothingSent`)
+
+18. **[Artisan CLI Reference](./artisan-cli.md)**
     - Project Creation (`artisan new`)
     - Full-Stack CRUD Scaffolder (`artisan make:crud <Name>`) (PRD §8.2)
     - Database Migrations & Seeding (`migrate`, `migrate:diff`, `db:seed`, etc.)
     - Generator Commands (`make:crud`, `make:schema`, `make:controller`, `make:job`, `make:notification`, `make:scope`, etc.)
     - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`)
 
-18. **[Performance & Benchmarks](./benchmarks.md)**
+19. **[Performance & Benchmarks](./benchmarks.md)**
     - Zero-Allocation Architecture Methodology
     - Micro-benchmark Results vs Gin, Fiber, and Laravel Octane

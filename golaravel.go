@@ -16,6 +16,7 @@ import (
 	"github.com/golaravel/golaravel/pkg/events"
 	"github.com/golaravel/golaravel/pkg/golaravel"
 	"github.com/golaravel/golaravel/pkg/hash"
+	glhttp "github.com/golaravel/golaravel/pkg/http"
 	"github.com/golaravel/golaravel/pkg/mail"
 	"github.com/golaravel/golaravel/pkg/notification"
 	"github.com/golaravel/golaravel/pkg/privacy"
@@ -47,6 +48,9 @@ type (
 	TestClient      = gltest.TestClient
 	TestResponse    = gltest.TestResponse
 	TestRequest     = gltest.TestRequestBuilder
+	HTTPResponse    = glhttp.Response
+	HTTPRequest     = glhttp.Request
+	HTTPClient      = glhttp.Client
 )
 
 // Test creates a high-performance HTTP test harness client directly against any http.Handler or GoLaravel Engine.
@@ -310,5 +314,82 @@ var (
 		FromContext:  session.FromContext,
 		StartSession: session.StartSession,
 		VerifyCSRF:   session.VerifyCSRFToken,
+	}
+
+	// Http provides access to the fluent outbound HTTP client and mocking engine
+	Http = struct {
+		Client            func(httpClient ...*http.Client) *glhttp.Client
+		WithToken         func(token string, prefix ...string) *glhttp.PendingRequest
+		WithBasicAuth     func(username, password string) *glhttp.PendingRequest
+		WithHeader        func(key, value string) *glhttp.PendingRequest
+		WithHeaders       func(headers map[string]string) *glhttp.PendingRequest
+		WithCookie        func(name, value string) *glhttp.PendingRequest
+		WithCookies       func(cookies []*http.Cookie) *glhttp.PendingRequest
+		WithQuery         func(params map[string]string) *glhttp.PendingRequest
+		WithQueryParam    func(key, value string) *glhttp.PendingRequest
+		WithContext       func(ctx stdContext.Context) *glhttp.PendingRequest
+		Timeout           func(d time.Duration) *glhttp.PendingRequest
+		BaseURL           func(baseURL string) *glhttp.PendingRequest
+		Accept            func(mimeType string) *glhttp.PendingRequest
+		AcceptJson        func() *glhttp.PendingRequest
+		ContentType       func(mimeType string) *glhttp.PendingRequest
+		AsJson            func() *glhttp.PendingRequest
+		AsForm            func() *glhttp.PendingRequest
+		AsMultipart       func() *glhttp.PendingRequest
+		Attach            func(fieldName string, content []byte, filename string, contentType ...string) *glhttp.PendingRequest
+		Retry             func(times int, sleep time.Duration, when ...glhttp.RetryCondition) *glhttp.PendingRequest
+		Get               func(url string, query ...map[string]string) (*glhttp.Response, error)
+		Post              func(url string, body ...any) (*glhttp.Response, error)
+		Put               func(url string, body ...any) (*glhttp.Response, error)
+		Patch             func(url string, body ...any) (*glhttp.Response, error)
+		Delete            func(url string, body ...any) (*glhttp.Response, error)
+		Head              func(url string, query ...map[string]string) (*glhttp.Response, error)
+		Send              func(method, url string, body ...any) (*glhttp.Response, error)
+		Fake              func(stubs ...any)
+		Sequence          func() *glhttp.ResponseSequence
+		Response          func(body any, statusAndHeaders ...any) *glhttp.Response
+		AssertSent        func(callback func(req *glhttp.Request) bool) error
+		AssertSentCount   func(expectedCount int) error
+		AssertNotSent     func(callback func(req *glhttp.Request) bool) error
+		AssertNothingSent func() error
+		Recorded          func() []glhttp.RecordedExchange
+		Reset             func()
+	}{
+		Client:            glhttp.NewClient,
+		WithToken:         glhttp.WithToken,
+		WithBasicAuth:     glhttp.WithBasicAuth,
+		WithHeader:        glhttp.WithHeader,
+		WithHeaders:       glhttp.WithHeaders,
+		WithCookie:        glhttp.WithCookie,
+		WithCookies:       glhttp.WithCookies,
+		WithQuery:         glhttp.WithQuery,
+		WithQueryParam:    glhttp.WithQueryParam,
+		WithContext:       glhttp.WithContext,
+		Timeout:           glhttp.Timeout,
+		BaseURL:           glhttp.BaseURL,
+		Accept:            glhttp.Accept,
+		AcceptJson:        glhttp.AcceptJson,
+		ContentType:       glhttp.ContentType,
+		AsJson:            glhttp.AsJson,
+		AsForm:            glhttp.AsForm,
+		AsMultipart:       glhttp.AsMultipart,
+		Attach:            glhttp.Attach,
+		Retry:             glhttp.Retry,
+		Get:               glhttp.Get,
+		Post:              glhttp.Post,
+		Put:               glhttp.Put,
+		Patch:             glhttp.Patch,
+		Delete:            glhttp.Delete,
+		Head:              glhttp.Head,
+		Send:              glhttp.Send,
+		Fake:              glhttp.Fake,
+		Sequence:          glhttp.Sequence,
+		Response:          glhttp.MockResponse,
+		AssertSent:        glhttp.AssertSent,
+		AssertSentCount:   glhttp.AssertSentCount,
+		AssertNotSent:     glhttp.AssertNotSent,
+		AssertNothingSent: glhttp.AssertNothingSent,
+		Recorded:          glhttp.Recorded,
+		Reset:             glhttp.Reset,
 	}
 )
