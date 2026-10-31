@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [v1.0.3] - 2026-10-31
 
+### Added
+- **Full Localization & Translation Subsystem (`pkg/translation`)**:
+  - Laravel-style JSON dictionaries for grouped files (`lang/{locale}/{group}.json`) and flat root files (`lang/{locale}.json`).
+  - Parameter interpolation with automatic casing matching (`:name`, `:Name`, `:NAME`).
+  - Pluralization / choice engine (`SelectPlural` / `TransChoice`) supporting singular/plural (`apple|apples`), exact numbers (`{0}`), and numeric ranges (`[1,5]`).
+  - Embedded `fs.FS` (`//go:embed`) and filesystem directory (`LoadDir`) loaders.
+  - Automated HTTP `translation.Middleware` with prioritized locale resolution: URL query (`?lang=`), route parameters (`:lang`), session keys, cookies, and weighted `Accept-Language` HTTP headers.
+  - Request context helpers (`c.Trans()`, `c.TransChoice()`, `c.GetLocale()`, `c.SetLocale()`).
+  - Artisan CLI generator command: `artisan make:lang <locale>`.
+  - Top-level framework facade exports in `golaravel.go` (`Trans`, `TransChoice`, `SetLocale`, `GetLocale`, `Localization`).
+
 ### Fixed
 - **Radix Router Catch-All Wildcard Integration (`pkg/router/tree.go`)**:
   - Fixed catch-all wildcard (`/*filepath`) registration when coexisting with existing static sub-branches under the same prefix (e.g., `/admin/assets/*`, `/admin/api/*`, and `/admin/*filepath`).

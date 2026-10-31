@@ -120,6 +120,7 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - 🧪 **[Full-Stack HTTP Testing Harness & Assertion Toolkit](./docs/testing.md)**
 - 🌐 **[Fluent HTTP Client & Mocking Engine](./docs/fluent-http-client.md)**
 - 📊 **[Prometheus, OpenTelemetry & Health Checks](./docs/telemetry-and-health-checks.md)**
+- 🌐 **[Localization & Translation Guide](./docs/localization-and-translation.md)**
 - 🛠️ **[Artisan CLI Reference](./docs/artisan-cli.md)**
 - 📊 **[Performance Benchmarks](./docs/benchmarks.md)**
 
@@ -135,6 +136,7 @@ artisan flutter:build       # Compile Flutter Web into client/build/web
 artisan make:schema Post    # Create Ent database schema
 artisan make:factory User   # Create Ent model factory
 artisan make:seeder Users   # Create database seeder
+artisan make:lang es        # Scaffold language translation dictionaries
 artisan make:controller Post # Create controller
 artisan make:auth            # Scaffold turnkey auth & TOTP 2FA controller
 artisan make:oauth GitHub    # Scaffold OAuth2 social auth controller

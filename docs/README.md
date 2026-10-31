@@ -161,13 +161,21 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
     - HTTP Observability Middlewares (`MetricsMiddleware`, `TraceMiddleware`)
     - Terminal Health Dashboard (`artisan health`)
 
-25. **[Artisan CLI Reference](./artisan-cli.md)**
+25. **[Localization & Translation Guide (pkg/translation)](./localization-and-translation.md)**
+    - JSON Dictionaries (`lang/{locale}/{group}.json` and `lang/{locale}.json`)
+    - Laravel-Style Parameter Interpolation (`:name`, `:Name`, `:NAME`)
+    - Pluralization / Choice (`apple|apples`, `{0}`, `[1,5]`)
+    - Automated HTTP Localization Middleware (`Accept-Language`, Query, Cookie, Session)
+    - Request Context Helpers (`c.Trans()`, `c.TransChoice()`, `c.GetLocale()`)
+    - Scaffolder Command (`artisan make:lang <locale>`)
+
+26. **[Artisan CLI Reference](./artisan-cli.md)**
     - Project Creation (`artisan new`)
     - Full-Stack CRUD Scaffolder (`artisan make:crud <Name>`) (PRD §8.2)
     - Database Migrations & Seeding (`migrate`, `migrate:diff`, `db:seed`, etc.)
-    - Generator Commands (`make:crud`, `make:schema`, `make:controller`, `make:job`, `make:factory`, `make:seeder`, `make:notification`, `make:limiter`, `make:scope`, etc.)
+    - Generator Commands (`make:crud`, `make:schema`, `make:controller`, `make:job`, `make:factory`, `make:seeder`, `make:lang`, `make:notification`, `make:limiter`, `make:scope`, etc.)
     - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`, `health`)
 
-26. **[Performance & Benchmarks](./benchmarks.md)**
+27. **[Performance & Benchmarks](./benchmarks.md)**
     - Zero-Allocation Architecture Methodology
     - Micro-benchmark Results vs Gin, Fiber, and Laravel Octane

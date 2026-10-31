@@ -30,11 +30,12 @@ import (
 	"github.com/golaravel/golaravel/pkg/storage"
 	"github.com/golaravel/golaravel/pkg/telemetry"
 	gltest "github.com/golaravel/golaravel/pkg/testing"
+	"github.com/golaravel/golaravel/pkg/translation"
 	"github.com/golaravel/golaravel/pkg/validation"
 )
 
 // Version is the current version of the GoLaravel framework.
-const Version = "v1.0.2"
+const Version = "v1.0.3"
 
 // Re-export core types for top-level framework ergonomics
 type (
@@ -61,7 +62,44 @@ type (
 	Limit           = ratelimit.Limit
 	RateLimitResult = ratelimit.Result
 	Faker           = factory.Faker
+	Translator      = translation.Translator
+	LocaleConfig    = translation.LocaleConfig
 )
+
+// Trans translates the given key using the global active locale.
+func Trans(key string, replace ...map[string]any) string {
+	return translation.Trans(key, replace...)
+}
+
+// TransChoice translates with pluralization using the global active locale.
+func TransChoice(key string, number int, replace ...map[string]any) string {
+	return translation.TransChoice(key, number, replace...)
+}
+
+// SetLocale sets the global framework active locale.
+func SetLocale(locale string) {
+	translation.SetLocale(locale)
+}
+
+// GetLocale returns the global framework active locale.
+func GetLocale() string {
+	return translation.GetLocale()
+}
+
+// SetFallbackLocale sets the global fallback locale.
+func SetFallbackLocale(fallback string) {
+	translation.SetFallback(fallback)
+}
+
+// HasTranslation checks if the translation key exists.
+func HasTranslation(key string, locale ...string) bool {
+	return translation.Has(key, locale...)
+}
+
+// Localization returns the HTTP middleware for automatic locale detection and persistence.
+func Localization(cfg ...translation.LocaleConfig) context.HandlerFunc {
+	return translation.Middleware(cfg...)
+}
 
 // Test creates a high-performance HTTP test harness client directly against any http.Handler or GoLaravel Engine.
 func Test(t testing.TB, app http.Handler) *gltest.TestClient {

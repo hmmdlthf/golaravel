@@ -64,6 +64,7 @@ All generators place files in deterministic directories:
 | `artisan make:migration <Name>`| `database/migrations/<timestamp>_<name>.sql` | Creates a new Atlas versioned migration |
 | `artisan make:factory <Name>`  | `database/factories/<name>_factory.go` | Creates an Ent model factory |
 | `artisan make:seeder <Name>`   | `database/seeders/<name>_seeder.go` | Creates a new database seeder class |
+| `artisan make:lang <locale>`   | `lang/<locale>/` | Scaffolds language translation dictionaries |
 
 ---
 

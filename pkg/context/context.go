@@ -333,6 +333,70 @@ func MustGetModel[T any](c *Context, name string) T {
 	return m
 }
 
+// Translator defines the interface for localizing messages within context.
+type Translator interface {
+	Get(key string, replace ...map[string]any) string
+	GetForLocale(key string, locale string, replace ...map[string]any) string
+	Choice(key string, number int, replace ...map[string]any) string
+	ChoiceForLocale(key string, locale string, number int, replace ...map[string]any) string
+	GetLocale() string
+}
+
+var (
+	globalTranslatorMu sync.RWMutex
+	globalTranslator   Translator
+)
+
+// SetTranslator sets the global translator used by context localization helpers.
+func SetTranslator(t Translator) {
+	globalTranslatorMu.Lock()
+	defer globalTranslatorMu.Unlock()
+	globalTranslator = t
+}
+
+// GetTranslator returns the global translator.
+func GetTranslator() Translator {
+	globalTranslatorMu.RLock()
+	defer globalTranslatorMu.RUnlock()
+	return globalTranslator
+}
+
+// SetLocale sets the locale string for the current request context.
+func (c *Context) SetLocale(locale string) {
+	c.Set("__locale", locale)
+}
+
+// GetLocale returns the locale string for the current request, or the default locale if unset.
+func (c *Context) GetLocale() string {
+	if val, ok := c.Get("__locale"); ok {
+		if s, ok := val.(string); ok && s != "" {
+			return s
+		}
+	}
+	if t := GetTranslator(); t != nil {
+		return t.GetLocale()
+	}
+	return "en"
+}
+
+// Trans translates the given message key for the current request's locale.
+func (c *Context) Trans(key string, replace ...map[string]any) string {
+	t := GetTranslator()
+	if t == nil {
+		return key
+	}
+	return t.GetForLocale(key, c.GetLocale(), replace...)
+}
+
+// TransChoice translates with pluralization for the current request's locale.
+func (c *Context) TransChoice(key string, number int, replace ...map[string]any) string {
+	t := GetTranslator()
+	if t == nil {
+		return key
+	}
+	return t.ChoiceForLocale(key, c.GetLocale(), number, replace...)
+}
+
 // FormValue returns the form value for the provided key.
 func (c *Context) FormValue(name string) string {
 	return c.Request.FormValue(name)

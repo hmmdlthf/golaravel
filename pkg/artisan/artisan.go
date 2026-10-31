@@ -197,6 +197,12 @@ func (r *Registry) registerDefaults() {
 	})
 
 	r.Register(&Command{
+		Name:        "make:lang",
+		Description: "Scaffold translation dictionaries for a locale (lang/<locale>/)",
+		Run:         makeLang,
+	})
+
+	r.Register(&Command{
 		Name:        "migrate",
 		Description: "Execute database migrations via Atlas (atlas migrate apply)",
 		Run:         runMigrate,

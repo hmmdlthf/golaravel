@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -320,6 +321,34 @@ func TestArtisan_Version(t *testing.T) {
 	for _, flag := range []string{"version", "--version", "-v", "-V"} {
 		if err := reg.Execute([]string{flag}); err != nil {
 			t.Errorf("expected flag %s to succeed without error, got: %v", flag, err)
+		}
+	}
+}
+
+func TestMakeLang_Scaffolding(t *testing.T) {
+	if err := makeLang(nil); err == nil {
+		t.Fatal("expected error on missing locale")
+	}
+
+	testLocale := "test_es"
+	defer os.RemoveAll(filepath.Join("lang", testLocale))
+	defer os.Remove(filepath.Join("lang", testLocale+".json"))
+
+	if err := makeLang([]string{testLocale}); err != nil {
+		t.Fatalf("makeLang failed: %v", err)
+	}
+
+	expectedFiles := []string{
+		filepath.Join("lang", testLocale, "auth.json"),
+		filepath.Join("lang", testLocale, "validation.json"),
+		filepath.Join("lang", testLocale, "pagination.json"),
+		filepath.Join("lang", testLocale, "messages.json"),
+		filepath.Join("lang", testLocale+".json"),
+	}
+
+	for _, f := range expectedFiles {
+		if _, err := os.Stat(f); os.IsNotExist(err) {
+			t.Errorf("expected scaffolded file %s does not exist", f)
 		}
 	}
 }
