@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [v1.0.3] - 2026-10-31
+## [v1.1.0] - 2026-10-31
 
 ### Added
 - **Full Localization & Translation Subsystem (`pkg/translation`)**:
@@ -17,8 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Embedded `fs.FS` (`//go:embed`) and filesystem directory (`LoadDir`) loaders.
   - Automated HTTP `translation.Middleware` with prioritized locale resolution: URL query (`?lang=`), route parameters (`:lang`), session keys, cookies, and weighted `Accept-Language` HTTP headers.
   - Request context helpers (`c.Trans()`, `c.TransChoice()`, `c.GetLocale()`, `c.SetLocale()`).
+  - First-class Right-to-Left (RTL) language detection (`ar`, `fa`, `ur`, `he`, etc.), regional normalization (`ar-SA`, `fa-IR`), custom RTL registry (`RegisterRTL`), and direction helpers (`c.IsRTL()`, `c.Direction()`).
   - Artisan CLI generator command: `artisan make:lang <locale>`.
-  - Top-level framework facade exports in `golaravel.go` (`Trans`, `TransChoice`, `SetLocale`, `GetLocale`, `Localization`).
+  - Top-level framework facade exports in `golaravel.go` (`Trans`, `TransChoice`, `SetLocale`, `GetLocale`, `IsRTL`, `Direction`, `Localization`).
+
+---
+
+## [v1.0.3] - 2026-10-31
 
 ### Fixed
 - **Radix Router Catch-All Wildcard Integration (`pkg/router/tree.go`)**:

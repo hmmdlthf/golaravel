@@ -21,7 +21,7 @@ import (
 )
 
 // Version is the current version of GoLaravel and Artisan CLI.
-const Version = "v1.0.3"
+const Version = "v1.1.0"
 
 // Command defines a CLI command in Artisan.
 type Command struct {
