@@ -370,3 +370,51 @@ func TestTranslator_LoadFromDir(t *testing.T) {
 		t.Errorf("expected 'Invalid credentials', got: %q", got)
 	}
 }
+
+func TestRTL_DetectionAndContext(t *testing.T) {
+	// Standard RTL languages
+	rtlLanguages := []string{"ar", "ar-SA", "ar-EG", "fa", "fa-IR", "ur", "ur-PK", "he", "he-IL", "yi", "ps", "sd", "ckb", "ug"}
+	for _, lang := range rtlLanguages {
+		if !translation.IsRTL(lang) {
+			t.Errorf("expected %q to be recognized as RTL", lang)
+		}
+		if translation.Direction(lang) != "rtl" {
+			t.Errorf("expected direction of %q to be 'rtl', got %q", lang, translation.Direction(lang))
+		}
+	}
+
+	// LTR languages
+	ltrLanguages := []string{"en", "en-US", "es", "fr", "de", "zh", "ja", "ru", "pt"}
+	for _, lang := range ltrLanguages {
+		if translation.IsRTL(lang) {
+			t.Errorf("expected %q to NOT be recognized as RTL", lang)
+		}
+		if translation.Direction(lang) != "ltr" {
+			t.Errorf("expected direction of %q to be 'ltr', got %q", lang, translation.Direction(lang))
+		}
+	}
+
+	// Custom registered RTL language
+	translation.RegisterRTL("custom_rtl")
+	if !translation.IsRTL("custom_rtl") {
+		t.Error("expected custom_rtl to be recognized as RTL")
+	}
+
+	// Context integration
+	c := context.NewContext()
+	c.SetLocale("ar-SA")
+	if !c.IsRTL() {
+		t.Error("expected c.IsRTL() to return true for ar-SA")
+	}
+	if c.Direction() != "rtl" {
+		t.Errorf("expected c.Direction() to be 'rtl', got: %q", c.Direction())
+	}
+
+	c.SetLocale("en-US")
+	if c.IsRTL() {
+		t.Error("expected c.IsRTL() to return false for en-US")
+	}
+	if c.Direction() != "ltr" {
+		t.Errorf("expected c.Direction() to be 'ltr', got: %q", c.Direction())
+	}
+}

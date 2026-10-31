@@ -173,6 +173,19 @@ package views
 
 import "github.com/golaravel/golaravel/pkg/context"
 
+templ Layout(c *context.Context) {
+    <!DOCTYPE html>
+    <html lang={ c.GetLocale() } dir={ c.Direction() }>
+    <head>
+        <meta charset="utf-8"/>
+        <title>{ c.Trans("app.title") }</title>
+    </head>
+    <body class={ templ.KV("font-arabic", c.IsRTL()) }>
+        { children... }
+    </body>
+    </html>
+}
+
 templ GreetingView(c *context.Context, name string) {
     <div class="p-6">
         <h1 class="text-2xl font-bold">{ c.Trans("messages.welcome", map[string]any{"name": name}) }</h1>
@@ -183,7 +196,52 @@ templ GreetingView(c *context.Context, name string) {
 
 ---
 
-## 5. Localization Middleware
+## 5. Right-to-Left (RTL) Support 🔄
+
+GoLaravel includes native, automatic Right-to-Left language detection and layout utilities.
+
+### Built-in RTL Language Codes
+The following ISO language codes and their regional variants (e.g. `ar-SA`, `ar-EG`, `fa-IR`, `ur-PK`, `he-IL`) are automatically recognized as RTL:
+- `ar` (Arabic)
+- `fa` (Persian / Farsi)
+- `ur` (Urdu)
+- `he` (Hebrew)
+- `yi` (Yiddish)
+- `ps` (Pashto)
+- `sd` (Sindhi)
+- `ug` (Uyghur)
+- `ckb` (Central Kurdish / Sorani)
+- `ku` (Kurdish)
+- `dv` (Divehi / Maldivian)
+
+### Direction Helpers
+Available both globally on `golaravel` and request-scoped on `*context.Context`:
+
+```go
+// Check RTL status
+golaravel.IsRTL()            // checks active global locale
+golaravel.IsRTL("ar-SA")     // => true
+golaravel.IsRTL("en-US")     // => false
+
+// Get "rtl" or "ltr" direction string
+golaravel.Direction("ar")    // => "rtl"
+golaravel.Direction("fr")    // => "ltr"
+
+// In HTTP Handlers:
+c.IsRTL()                    // => true if request is in Arabic, Persian, etc.
+c.Direction()                // => "rtl" or "ltr"
+```
+
+### Registering Custom RTL Locales
+Add custom or dialect locale codes at application boot:
+
+```go
+golaravel.RegisterRTL("prs", "bal")
+```
+
+---
+
+## 6. Localization Middleware
 
 The `translation.Middleware` (or `golaravel.Localization`) automatically resolves the preferred locale per request in a prioritized sequence:
 
@@ -211,7 +269,7 @@ The middleware also automatically sets the `Content-Language` header in the HTTP
 
 ---
 
-## 6. Embedding Translation Files with Go Embed
+## 7. Embedding Translation Files with Go Embed
 
 In production, embed your `lang/` directory into your compiled binary so no separate filesystem assets are required:
 
@@ -245,7 +303,7 @@ func main() {
 
 ---
 
-## 7. Artisan CLI Scaffolder
+## 8. Artisan CLI Scaffolder
 
 Generate complete translation dictionaries for any language with one command:
 

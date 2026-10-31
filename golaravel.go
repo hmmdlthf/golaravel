@@ -96,6 +96,26 @@ func HasTranslation(key string, locale ...string) bool {
 	return translation.Has(key, locale...)
 }
 
+// IsRTL reports whether the active locale (or specified locale) is Right-to-Left.
+func IsRTL(locale ...string) bool {
+	return translation.IsRTL(locale...)
+}
+
+// IsLTR reports whether the active locale (or specified locale) is Left-to-Right.
+func IsLTR(locale ...string) bool {
+	return translation.IsLTR(locale...)
+}
+
+// Direction returns "rtl" or "ltr" for the active locale (or specified locale).
+func Direction(locale ...string) string {
+	return translation.Direction(locale...)
+}
+
+// RegisterRTL registers custom language codes as Right-to-Left.
+func RegisterRTL(locales ...string) {
+	translation.RegisterRTL(locales...)
+}
+
 // Localization returns the HTTP middleware for automatic locale detection and persistence.
 func Localization(cfg ...translation.LocaleConfig) context.HandlerFunc {
 	return translation.Middleware(cfg...)

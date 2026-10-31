@@ -340,6 +340,8 @@ type Translator interface {
 	Choice(key string, number int, replace ...map[string]any) string
 	ChoiceForLocale(key string, locale string, number int, replace ...map[string]any) string
 	GetLocale() string
+	IsRTL(locale ...string) bool
+	Direction(locale ...string) string
 }
 
 var (
@@ -395,6 +397,25 @@ func (c *Context) TransChoice(key string, number int, replace ...map[string]any)
 		return key
 	}
 	return t.ChoiceForLocale(key, c.GetLocale(), number, replace...)
+}
+
+// IsRTL reports whether the current request's locale is Right-to-Left (e.g. Arabic, Persian, Urdu, Hebrew).
+func (c *Context) IsRTL() bool {
+	t := GetTranslator()
+	if t == nil {
+		return false
+	}
+	return t.IsRTL(c.GetLocale())
+}
+
+// Direction returns "rtl" or "ltr" for the current request's locale.
+// Perfect for HTML/Templ layouts: <html lang={ c.GetLocale() } dir={ c.Direction() }>
+func (c *Context) Direction() string {
+	t := GetTranslator()
+	if t == nil {
+		return "ltr"
+	}
+	return t.Direction(c.GetLocale())
 }
 
 // FormValue returns the form value for the provided key.
