@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.1.1] - 2026-11-01
+
+### Added
+- **HTTP Interoperability**:
+  - `WrapHandler(http.Handler)` converts standard `http.Handler` into GoLaravel `context.HandlerFunc`.
+  - `WrapHandlerFunc(http.HandlerFunc)` converts standard `http.HandlerFunc` into GoLaravel `context.HandlerFunc`.
+
+---
+
 ## [v1.1.0] - 2026-10-31
 
 ### Added

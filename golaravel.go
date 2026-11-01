@@ -35,7 +35,7 @@ import (
 )
 
 // Version is the current version of the GoLaravel framework.
-const Version = "v1.1.0"
+const Version = "v1.1.1"
 
 // Re-export core types for top-level framework ergonomics
 type (
@@ -124,6 +124,22 @@ func Localization(cfg ...translation.LocaleConfig) context.HandlerFunc {
 // Test creates a high-performance HTTP test harness client directly against any http.Handler or GoLaravel Engine.
 func Test(t testing.TB, app http.Handler) *gltest.TestClient {
 	return gltest.New(t, app)
+}
+
+// WrapHandler converts a standard http.Handler into a GoLaravel HandlerFunc.
+func WrapHandler(h http.Handler) context.HandlerFunc {
+	return func(c *context.Context) error {
+		h.ServeHTTP(&c.Response, c.Request)
+		return nil
+	}
+}
+
+// WrapHandlerFunc converts a standard http.HandlerFunc into a GoLaravel HandlerFunc.
+func WrapHandlerFunc(h http.HandlerFunc) context.HandlerFunc {
+	return func(c *context.Context) error {
+		h(&c.Response, c.Request)
+		return nil
+	}
 }
 
 // New initializes a bare GoLaravel application.
