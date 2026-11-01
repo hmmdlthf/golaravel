@@ -261,103 +261,75 @@ func (n *node) insertChild(path, fullPath string, handlers []context.HandlerFunc
 
 // getValue returns the handlers registered with the given path and populates context params.
 func (n *node) getValue(path string, c *context.Context) []context.HandlerFunc {
-walk:
-	for {
-		prefix := n.path
-		if len(path) > len(prefix) {
-			if path[:len(prefix)] == prefix {
-				path = path[len(prefix):]
+	prefix := n.path
+	if len(path) > len(prefix) {
+		if path[:len(prefix)] == prefix {
+			subPath := path[len(prefix):]
 
-				// Check static children first before checking wildcard
-				cByte := path[0]
-				for i := 0; i < len(n.indices); i++ {
-					if cByte == n.indices[i] {
-						n = n.children[i]
-						continue walk
+			// 1. Try static children first
+			cByte := subPath[0]
+			for i := 0; i < len(n.indices); i++ {
+				if cByte == n.indices[i] {
+					if handlers := n.children[i].getValue(subPath, c); handlers != nil {
+						return handlers
 					}
-				}
-
-				if !n.wildChild {
-					// Nothing found
-					return nil
-				}
-
-				// Find wildcard child
-				var wildNode *node
-				for _, ch := range n.children {
-					if ch.nType == paramNode || ch.nType == catchAllNode {
-						wildNode = ch
-						break
-					}
-				}
-				if wildNode == nil {
-					return nil
-				}
-				n = wildNode
-				switch n.nType {
-				case paramNode:
-					// Find end of parameter (delimited by '/')
-					end := 0
-					for end < len(path) && path[end] != '/' {
-						end++
-					}
-
-					// Add parameter directly to context inline buffer
-					if c != nil {
-						c.AddParam(n.paramName, path[:end])
-					}
-
-					// We need to go deeper!
-					if end < len(path) {
-						subPath := path[end:]
-						for _, ch := range n.children {
-							if len(subPath) >= len(ch.path) && subPath[:len(ch.path)] == ch.path {
-								path = subPath
-								n = ch
-								continue walk
-							}
-						}
-						if len(n.children) > 0 {
-							path = subPath
-							n = n.children[0]
-							continue walk
-						}
-						return nil
-					}
-
-					if n.handlers != nil {
-						return n.handlers
-					}
-					return nil
-
-				case catchAllNode:
-					if c != nil {
-						c.AddParam(n.paramName, path)
-					}
-					return n.handlers
-
-				default:
-					panic("invalid node type")
+					break
 				}
 			}
-		} else if path == prefix {
-			// Exact match
-			if n.handlers != nil {
-				return n.handlers
-			}
+
+			// 2. Fall back to wildcard child if static child did not produce a match
 			if n.wildChild {
 				for _, ch := range n.children {
-					if ch.nType == catchAllNode {
+					if ch.nType == paramNode {
+						end := 0
+						for end < len(subPath) && subPath[end] != '/' {
+							end++
+						}
 						if c != nil {
-							c.AddParam(ch.paramName, "")
+							c.AddParam(ch.paramName, subPath[:end])
+						}
+						if end < len(subPath) {
+							rest := subPath[end:]
+							for _, subCh := range ch.children {
+								if len(rest) >= len(subCh.path) && rest[:len(subCh.path)] == subCh.path {
+									if handlers := subCh.getValue(rest, c); handlers != nil {
+										return handlers
+									}
+								}
+							}
+							if len(ch.children) > 0 {
+								if handlers := ch.children[0].getValue(rest, c); handlers != nil {
+									return handlers
+								}
+							}
+						} else if ch.handlers != nil {
+							return ch.handlers
+						}
+					} else if ch.nType == catchAllNode {
+						if c != nil {
+							c.AddParam(ch.paramName, subPath)
 						}
 						return ch.handlers
 					}
 				}
 			}
 		}
-		return nil
+	} else if path == prefix {
+		if n.handlers != nil {
+			return n.handlers
+		}
+		if n.wildChild {
+			for _, ch := range n.children {
+				if ch.nType == catchAllNode {
+					if c != nil {
+						c.AddParam(ch.paramName, "")
+					}
+					return ch.handlers
+				}
+			}
+		}
 	}
+	return nil
 }
 
 // findWildcard finds the first parameter or catch-all wildcard in a path segment.

@@ -179,6 +179,27 @@ func TestRouter_CatchAllWithExistingPrefix(t *testing.T) {
 	if handlers == nil {
 		t.Fatal("expected /admin/dashboard to match catch-all")
 	}
+
+	// Test deep subpath under catch-all
+	c.Reset(httptest.NewRecorder(), httptest.NewRequest("GET", "/admin/other/deep/file.otf", nil))
+	handlers = r.Match("GET", "/admin/other/deep/file.otf", c)
+	if handlers == nil {
+		t.Fatal("expected /admin/other/deep/file.otf to match catch-all")
+	}
+
+	// Test assets under catch-all when no /admin/assets route exists
+	r2 := New()
+	r2.GET("/admin/api/schema", func(c *context.Context) error {
+		return c.String(http.StatusOK, "schema")
+	})
+	r2.GET("/admin/*filepath", func(c *context.Context) error {
+		return c.String(http.StatusOK, "spa:%s", c.Param("filepath"))
+	})
+	c.Reset(httptest.NewRecorder(), httptest.NewRequest("GET", "/admin/assets/fonts/MaterialIcons-Regular.otf", nil))
+	handlers = r2.Match("GET", "/admin/assets/fonts/MaterialIcons-Regular.otf", c)
+	if handlers == nil {
+		t.Fatal("expected /admin/assets/fonts/MaterialIcons-Regular.otf to match catch-all on r2")
+	}
 }
 
 func BenchmarkRouter_Match_Static(b *testing.B) {

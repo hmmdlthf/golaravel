@@ -2,6 +2,7 @@ package flutter
 
 import (
 	"bytes"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,6 +11,17 @@ import (
 	"github.com/golaravel/golaravel/pkg/context"
 	"github.com/golaravel/golaravel/pkg/router"
 )
+
+func init() {
+	_ = mime.AddExtensionType(".wasm", "application/wasm")
+	_ = mime.AddExtensionType(".otf", "font/otf")
+	_ = mime.AddExtensionType(".ttf", "font/ttf")
+	_ = mime.AddExtensionType(".woff", "font/woff")
+	_ = mime.AddExtensionType(".woff2", "font/woff2")
+	_ = mime.AddExtensionType(".json", "application/json")
+	_ = mime.AddExtensionType(".bin", "application/octet-stream")
+	_ = mime.AddExtensionType(".frag", "text/plain")
+}
 
 // Options defines configuration for serving Flutter Web applications from GoLaravel.
 type Options struct {
