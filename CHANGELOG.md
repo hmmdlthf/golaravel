@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.1.2] - 2026-11-01
+
+### Fixed
+- **Cross-Platform Telemetry (`pkg/telemetry`)**:
+  - Replaced Unix-only `syscall.Statfs` in `DiskCheck` with OS-specific implementations (`disk_unix.go` and `disk_windows.go` via Win32 `GetDiskFreeSpaceExW`).
+  - Enables clean cross-compilation for Windows (`GOOS=windows GOARCH=amd64`).
+
+---
+
 ## [v1.1.1] - 2026-11-01
 
 ### Added

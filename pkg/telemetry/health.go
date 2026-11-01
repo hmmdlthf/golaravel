@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -200,13 +199,10 @@ func MemoryCheck(name string, maxAllocBytes uint64) Check {
 // DiskCheck returns a Check that verifies storage filesystem free space.
 func DiskCheck(name, path string, minFreeBytes uint64) Check {
 	return NewCheckFunc(name, func(ctx context.Context) (HealthStatus, map[string]any, error) {
-		var stat syscall.Statfs_t
-		if err := syscall.Statfs(path, &stat); err != nil {
-			return StatusUnhealthy, nil, fmt.Errorf("failed to statfs path '%s': %w", path, err)
+		freeBytes, totalBytes, err := getDiskSpace(path)
+		if err != nil {
+			return StatusUnhealthy, nil, fmt.Errorf("failed to get disk space for path '%s': %w", path, err)
 		}
-
-		freeBytes := stat.Bavail * uint64(stat.Bsize)
-		totalBytes := stat.Blocks * uint64(stat.Bsize)
 
 		details := map[string]any{
 			"path":           path,
