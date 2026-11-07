@@ -108,6 +108,9 @@ func ServeWeb(r *router.Router, opts ...Options) {
 			if strings.Contains(string(content), "<head>") {
 				content = bytes.Replace(content, []byte("<head>"), []byte("<head>\n  "+metaTags), 1)
 			}
+			if config.BuildID != "" {
+				content = bytes.Replace(content, []byte(`src="flutter_bootstrap.js"`), []byte(`src="flutter_bootstrap.js?v=`+config.BuildID+`"`), 1)
+			}
 		}
 
 		// Inject customizable pre-loader screen into index.html
@@ -115,6 +118,9 @@ func ServeWeb(r *router.Router, opts ...Options) {
 			content = InjectLoadingScreen(content, config.LoadingConfig)
 		}
 
+		c.SetHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.SetHeader("Pragma", "no-cache")
+		c.SetHeader("Expires", "0")
 		c.SetHeader("Content-Type", "text/html; charset=utf-8")
 		return c.Bytes(http.StatusOK, "text/html; charset=utf-8", content)
 	}
@@ -145,6 +151,11 @@ func ServeWeb(r *router.Router, opts ...Options) {
 
 		// Serve static file if it exists on disk
 		if err == nil && !info.IsDir() {
+			if strings.HasSuffix(reqPath, ".js") || strings.HasSuffix(reqPath, ".json") {
+				c.SetHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+				c.SetHeader("Pragma", "no-cache")
+				c.SetHeader("Expires", "0")
+			}
 			if mount != "" {
 				http.StripPrefix(mount, fileServer).ServeHTTP(&c.Response, c.Request)
 			} else {
