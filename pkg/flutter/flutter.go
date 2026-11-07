@@ -168,7 +168,10 @@ func ServeWeb(r *router.Router, opts ...Options) {
 
 		// Serve static file if it exists on disk
 		if err == nil && !info.IsDir() {
-			if strings.HasSuffix(reqPath, ".js") || strings.HasSuffix(reqPath, ".json") {
+			if strings.HasSuffix(reqPath, ".js") || strings.HasSuffix(reqPath, ".json") ||
+				strings.HasSuffix(reqPath, ".otf") || strings.HasSuffix(reqPath, ".ttf") ||
+				strings.HasSuffix(reqPath, ".woff") || strings.HasSuffix(reqPath, ".woff2") ||
+				strings.HasSuffix(reqPath, ".wasm") {
 				c.SetHeader("Cache-Control", "no-cache, no-store, must-revalidate")
 				c.SetHeader("Pragma", "no-cache")
 				c.SetHeader("Expires", "0")
