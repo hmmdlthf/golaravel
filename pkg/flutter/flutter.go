@@ -25,17 +25,19 @@ func init() {
 
 // Options defines configuration for serving Flutter Web applications from GoLaravel.
 type Options struct {
-	MountPath   string // e.g. "/" or "/app"
-	DistDir     string // path to flutter build/web directory
-	FallbackSPA bool   // fallback non-file routes to index.html for Flutter Web client routing
+	MountPath     string        // e.g. "/" or "/app"
+	DistDir       string        // path to flutter build/web directory
+	FallbackSPA   bool          // fallback non-file routes to index.html for Flutter Web client routing
+	LoadingConfig LoadingConfig // visual pre-Flutter HTML/CSS loading screen configuration
 }
 
 // DefaultOptions provides default settings for Flutter Web serving.
 func DefaultOptions() Options {
 	return Options{
-		MountPath:   "/app",
-		DistDir:     "client/build/web",
-		FallbackSPA: true,
+		MountPath:     "/app",
+		DistDir:       "client/build/web",
+		FallbackSPA:   true,
+		LoadingConfig: DefaultLoadingConfig(),
 	}
 }
 
@@ -88,6 +90,11 @@ func ServeWeb(r *router.Router, opts ...Options) {
 
 		if baseHref != "/" {
 			content = bytes.Replace(content, []byte(`<base href="/">`), []byte(`<base href="`+baseHref+`">`), 1)
+		}
+
+		// Inject customizable pre-loader screen into index.html
+		if config.LoadingConfig.Enabled {
+			content = InjectLoadingScreen(content, config.LoadingConfig)
 		}
 
 		c.SetHeader("Content-Type", "text/html; charset=utf-8")
