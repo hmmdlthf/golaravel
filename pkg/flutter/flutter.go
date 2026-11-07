@@ -149,6 +149,23 @@ func ServeWeb(r *router.Router, opts ...Options) {
 		filePath := filepath.Join(dist, filepath.Clean("/"+reqPath))
 		info, err := os.Stat(filePath)
 
+		// Intercept flutter_bootstrap.js to inject main.dart.js cache-busting and disable service worker caching
+		if reqPath == "flutter_bootstrap.js" && err == nil && !info.IsDir() {
+			content, readErr := os.ReadFile(filePath)
+			if readErr == nil {
+				if config.BuildID != "" {
+					content = bytes.Replace(content, []byte(`"mainJsPath":"main.dart.js"`), []byte(`"mainJsPath":"main.dart.js?v=`+config.BuildID+`"`), -1)
+				}
+				content = bytes.Replace(content, []byte(`serviceWorkerSettings:`), []byte(`/* disabled */ _swSettings:`), -1)
+
+				c.SetHeader("Cache-Control", "no-cache, no-store, must-revalidate")
+				c.SetHeader("Pragma", "no-cache")
+				c.SetHeader("Expires", "0")
+				c.SetHeader("Content-Type", "application/javascript; charset=utf-8")
+				return c.Bytes(http.StatusOK, "application/javascript; charset=utf-8", content)
+			}
+		}
+
 		// Serve static file if it exists on disk
 		if err == nil && !info.IsDir() {
 			if strings.HasSuffix(reqPath, ".js") || strings.HasSuffix(reqPath, ".json") {
