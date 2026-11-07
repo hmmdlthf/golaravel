@@ -29,6 +29,8 @@ type Options struct {
 	DistDir       string        // path to flutter build/web directory
 	FallbackSPA   bool          // fallback non-file routes to index.html for Flutter Web client routing
 	LoadingConfig LoadingConfig // visual pre-Flutter HTML/CSS loading screen configuration
+	Version       string        // application semantic version (e.g. "1.4.0")
+	BuildID       string        // deployed build identifier / timestamp
 }
 
 // DefaultOptions provides default settings for Flutter Web serving.
@@ -90,6 +92,22 @@ func ServeWeb(r *router.Router, opts ...Options) {
 
 		if baseHref != "/" {
 			content = bytes.Replace(content, []byte(`<base href="/">`), []byte(`<base href="`+baseHref+`">`), 1)
+		}
+
+		// Inject version and build-id meta tags if configured
+		if config.Version != "" || config.BuildID != "" {
+			metaTags := ""
+			if config.Version != "" {
+				metaTags += `<meta name="app-version" content="` + config.Version + `">`
+				c.SetHeader("X-App-Version", config.Version)
+			}
+			if config.BuildID != "" {
+				metaTags += `<meta name="app-build-id" content="` + config.BuildID + `">`
+				c.SetHeader("X-App-Build-ID", config.BuildID)
+			}
+			if strings.Contains(string(content), "<head>") {
+				content = bytes.Replace(content, []byte("<head>"), []byte("<head>\n  "+metaTags), 1)
+			}
 		}
 
 		// Inject customizable pre-loader screen into index.html
