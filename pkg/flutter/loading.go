@@ -218,23 +218,25 @@ func (c LoadingConfig) RenderHTML() string {
 <script>
   (function() {
     function hideGflPreloader() {
-      var p = document.getElementById('gfl-preloader');
-      if (p) {
+      var preloaders = document.querySelectorAll('#gfl-preloader, [id="gfl-preloader"]');
+      preloaders.forEach(function(p) {
         p.style.opacity = '0';
         p.style.pointerEvents = 'none';
         setTimeout(function() { if (p && p.parentNode) p.parentNode.removeChild(p); }, 400);
-      }
+      });
     }
     // Auto-dismiss once Flutter first frame renders or falls back after timeout
     window.addEventListener('flutter-first-frame', hideGflPreloader);
     var checkCount = 0;
     var checkInterval = setInterval(function() {
       checkCount++;
-      if (document.querySelector('flutter-view') || document.querySelector('flt-glass-pane') || checkCount > 50) {
+      if (document.querySelector('flutter-view') || document.querySelector('flt-glass-pane') || checkCount > 35) {
         clearInterval(checkInterval);
         setTimeout(hideGflPreloader, 100);
       }
     }, 100);
+    // Hard fallback after 3.5s
+    setTimeout(hideGflPreloader, 3500);
   })();
 </script>`, bg, textColor, textColor, extraCSS, innerContent)
 }
