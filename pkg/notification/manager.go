@@ -33,6 +33,7 @@ func NewManager() *Manager {
 	m.RegisterChannel("broadcast", NewBroadcastChannel(broadcast.DefaultHub()))
 	m.RegisterChannel("slack", NewSlackChannel(""))
 	m.RegisterChannel("sms", NewSMSChannel(nil))
+	m.RegisterChannel("push", NewPushChannel(nil))
 
 	return m
 }

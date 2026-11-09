@@ -14,12 +14,13 @@ const (
 	ChannelBroadcast = "broadcast"
 	ChannelSlack     = "slack"
 	ChannelSMS       = "sms"
+	ChannelPush      = "push"
 )
 
 // Notification defines the base interface all notifications must implement.
 type Notification interface {
 	// Via returns the channels the notification should be delivered on.
-	// Common channels: "mail", "database", "broadcast", "slack", "sms"
+	// Common channels: "mail", "database", "broadcast", "slack", "sms", "push"
 	Via(notifiable Notifiable) []string
 }
 
@@ -53,6 +54,11 @@ type SMSNotification interface {
 	ToSMS(notifiable Notifiable) (*SMSMessage, error)
 }
 
+// PushNotification is implemented by notifications delivering mobile / web push alerts (FCM, APNs, WebPush).
+type PushNotification interface {
+	ToPush(notifiable Notifiable) (*PushMessage, error)
+}
+
 // DatabaseMessage represents an in-app notification stored in the database.
 type DatabaseMessage struct {
 	ID        string         `json:"id"`
@@ -83,4 +89,18 @@ type SMSMessage struct {
 	To   string `json:"to"`
 	From string `json:"from,omitempty"`
 	Body string `json:"body"`
+}
+
+// PushMessage represents a mobile/web push notification message (e.g. Firebase Cloud Messaging / APNs).
+type PushMessage struct {
+	Token       string         `json:"token,omitempty"`
+	Tokens      []string       `json:"tokens,omitempty"`
+	Topic       string         `json:"topic,omitempty"`
+	Title       string         `json:"title"`
+	Body        string         `json:"body"`
+	Data        map[string]any `json:"data,omitempty"`
+	ImageURL    string         `json:"image_url,omitempty"`
+	Badge       int            `json:"badge,omitempty"`
+	Sound       string         `json:"sound,omitempty"`
+	ClickAction string         `json:"click_action,omitempty"`
 }

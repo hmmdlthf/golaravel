@@ -320,6 +320,150 @@ func (c *SMSChannel) Send(ctx context.Context, notifiable Notifiable, notificati
 	return c.driver.SendSMS(ctx, msg)
 }
 
+// ============================================================================
+// 6. PUSH NOTIFICATION CHANNEL (FCM / APNS / WEB PUSH)
+// ============================================================================
+
+// PushDriver defines a push notification transport driver (e.g. Firebase Cloud Messaging, APNs, Log).
+type PushDriver interface {
+	SendPush(ctx context.Context, msg *PushMessage) error
+}
+
+// LogPushDriver logs push notifications to structured logger (ideal for dev/testing).
+type LogPushDriver struct{}
+
+func (d *LogPushDriver) SendPush(ctx context.Context, msg *PushMessage) error {
+	slog.Info("Push Notification Dispatched",
+		"title", msg.Title,
+		"body", msg.Body,
+		"token", msg.Token,
+		"topic", msg.Topic,
+		"data", msg.Data,
+	)
+	return nil
+}
+
+// FCMPushDriver delivers push notifications via Firebase Cloud Messaging HTTP API.
+type FCMPushDriver struct {
+	serverKey  string
+	projectID  string
+	httpClient *http.Client
+	endpoint   string
+}
+
+// NewFCMPushDriver creates an FCM push driver.
+func NewFCMPushDriver(serverKey string, projectID ...string) *FCMPushDriver {
+	pid := ""
+	if len(projectID) > 0 {
+		pid = projectID[0]
+	}
+	return &FCMPushDriver{
+		serverKey:  serverKey,
+		projectID:  pid,
+		httpClient: &http.Client{Timeout: 8 * time.Second},
+		endpoint:   "https://fcm.googleapis.com/fcm/send",
+	}
+}
+
+func (d *FCMPushDriver) SendPush(ctx context.Context, msg *PushMessage) error {
+	if d.serverKey == "" {
+		slog.Info("FCM Push Driver (Simulation - Server key not set)",
+			"title", msg.Title,
+			"body", msg.Body,
+			"token", msg.Token,
+			"tokens_count", len(msg.Tokens),
+		)
+		return nil
+	}
+
+	payload := map[string]any{
+		"notification": map[string]any{
+			"title": msg.Title,
+			"body":  msg.Body,
+		},
+		"data": msg.Data,
+	}
+
+	if msg.ImageURL != "" {
+		payload["notification"].(map[string]any)["image"] = msg.ImageURL
+	}
+
+	if msg.Token != "" {
+		payload["to"] = msg.Token
+	} else if len(msg.Tokens) > 0 {
+		payload["registration_ids"] = msg.Tokens
+	} else if msg.Topic != "" {
+		payload["to"] = "/topics/" + msg.Topic
+	}
+
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed marshaling FCM payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.endpoint, bytes.NewReader(raw))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "key="+d.serverKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("FCM push request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("FCM push API returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// PushChannel delivers push notifications to registered devices.
+type PushChannel struct {
+	driver PushDriver
+}
+
+// NewPushChannel creates a push notification channel.
+func NewPushChannel(driver PushDriver) *PushChannel {
+	if driver == nil {
+		driver = &LogPushDriver{}
+	}
+	return &PushChannel{driver: driver}
+}
+
+// Driver returns the underlying push driver.
+func (c *PushChannel) Driver() PushDriver {
+	return c.driver
+}
+
+func (c *PushChannel) Send(ctx context.Context, notifiable Notifiable, notification Notification) error {
+	pushNotification, ok := notification.(PushNotification)
+	if !ok {
+		return fmt.Errorf("notification %T does not implement PushNotification", notification)
+	}
+
+	msg, err := pushNotification.ToPush(notifiable)
+	if err != nil {
+		return fmt.Errorf("failed preparing push message: %w", err)
+	}
+
+	if msg.Token == "" && len(msg.Tokens) == 0 && msg.Topic == "" {
+		token := notifiable.RouteNotificationFor("push")
+		if token == "" {
+			token = notifiable.RouteNotificationFor("fcm")
+		}
+		if token == "" {
+			// Skip push if notifiable has no push token
+			return nil
+		}
+		msg.Token = token
+	}
+
+	return c.driver.SendPush(ctx, msg)
+}
+
 func generateUUID() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)

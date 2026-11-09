@@ -201,3 +201,36 @@ func TestOnDemandNotification(t *testing.T) {
 		t.Log("OnDemand mail delivery succeeded")
 	}
 }
+
+type PushAlertNotification struct {
+	Title string
+	Body  string
+}
+
+func (n *PushAlertNotification) Via(notifiable notification.Notifiable) []string {
+	return []string{"push"}
+}
+
+func (n *PushAlertNotification) ToPush(notifiable notification.Notifiable) (*notification.PushMessage, error) {
+	return &notification.PushMessage{
+		Title: n.Title,
+		Body:  n.Body,
+		Data:  map[string]any{"type": "proposal_received"},
+	}, nil
+}
+
+func TestPushNotification(t *testing.T) {
+	ctx := context.Background()
+	mgr := notification.NewManager()
+
+	recipient := notification.OnDemand("push", "device_fcm_token_123456")
+	notif := &PushAlertNotification{
+		Title: "New Halal Match Proposal",
+		Body:  "A verified candidate expressed interest in your profile.",
+	}
+
+	err := mgr.Send(ctx, []notification.Notifiable{recipient}, notif)
+	if err != nil {
+		t.Fatalf("push notification failed: %v", err)
+	}
+}
