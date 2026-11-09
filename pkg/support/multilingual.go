@@ -83,14 +83,24 @@ func SetSupportLanguageCookie(w http.ResponseWriter, lang string) {
 	})
 }
 
-func isValidLanguage(lang string) bool {
+// IsValidLanguage checks whether a language code is supported.
+func IsValidLanguage(lang string) bool {
 	l := strings.ToLower(strings.TrimSpace(lang))
 	_, exists := SupportedLanguages[l]
 	return exists
 }
 
-func normalizeLanguage(lang string) string {
+// NormalizeLanguage trims and lowercases a language code.
+func NormalizeLanguage(lang string) string {
 	return strings.ToLower(strings.TrimSpace(lang))
+}
+
+func isValidLanguage(lang string) bool {
+	return IsValidLanguage(lang)
+}
+
+func normalizeLanguage(lang string) string {
+	return NormalizeLanguage(lang)
 }
 
 // SpeechProcessor defines audio ingestion, transcription, and translation into English.

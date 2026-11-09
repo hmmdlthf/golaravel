@@ -5,11 +5,35 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 )
 
+var (
+	defaultServiceLock     sync.RWMutex
+	defaultServiceInstance *Service
+)
+
+// GetDefaultService returns the global support concierge service instance.
+func GetDefaultService() *Service {
+	defaultServiceLock.Lock()
+	defer defaultServiceLock.Unlock()
+	if defaultServiceInstance == nil {
+		defaultServiceInstance = NewService(GetDefaultStore(), GetDefaultKnowledgeBase())
+	}
+	return defaultServiceInstance
+}
+
+// SetDefaultService configures the global support concierge service instance.
+func SetDefaultService(svc *Service) {
+	defaultServiceLock.Lock()
+	defer defaultServiceLock.Unlock()
+	defaultServiceInstance = svc
+}
+
 // VoiceFeatureRequest encapsulates an inbound audio request in any language.
 type VoiceFeatureRequest struct {
+	TicketID        string
 	AudioBytes      []byte
 	MimeType        string
 	DurationSeconds float64
@@ -206,8 +230,12 @@ func (s *Service) SubmitVoiceFeatureRequest(ctx context.Context, req VoiceFeatur
 
 	// 4. Create Feature Request Ticket
 	subject := "Feature Request: " + summarizeText(englishTranslation, 45)
+	ticketID := req.TicketID
+	if ticketID == "" {
+		ticketID = GenerateTicketID()
+	}
 	ticket := &Ticket{
-		ID:              GenerateTicketID(),
+		ID:              ticketID,
 		TenantID:        req.TenantID,
 		PanelID:         req.PanelID,
 		UserKey:         req.UserKey,
@@ -405,7 +433,9 @@ func shouldEscalateToLive(content string) bool {
 		"speak to human", "live agent", "not working", "talk to support",
 		"talk to someone", "escalate", "customer care", "agent please",
 		"call me", "human please", "operator", "speak with agent",
-		"unresolved", "doesn't help", "human support",
+		"unresolved", "doesn't help", "human support", "human representative",
+		"human agent", "talk to human", "real person", "person please",
+		"connect me to human", "speak with human",
 	}
 	for _, t := range triggers {
 		if strings.Contains(c, t) {
