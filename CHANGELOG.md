@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.4.0] - 2026-11-10
+
+### Added
+- **Request-Scoped Database Sessions (`pkg/database`)**:
+  - `Session`: a transaction that starts lazily on the first statement and runs an optional `SessionInit` hook, e.g. to set a role or tenant variable for PostgreSQL row level security. Requests that never touch the database never open one.
+  - `SessionDriver` / `NewSessionDriver`: an Ent SQL driver that routes statements into the `Session` carried by the statement's context; nested `client.Tx(ctx)` calls are backed by savepoints.
+  - `SessionMiddleware`: gives each request a session, committing when the handler chain succeeds and rolling back on error or panic.
+  - `WithSession`, `SessionFromContext` and `WithoutSession` context helpers.
+
 ## [v1.1.2] - 2026-11-01
 
 ### Fixed
