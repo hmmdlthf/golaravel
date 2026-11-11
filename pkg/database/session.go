@@ -188,6 +188,32 @@ func (d *SessionDriver) Query(ctx context.Context, query string, args, v any) er
 	return d.Driver.Query(ctx, query, args, v)
 }
 
+// ExecContext runs a raw statement, inside the context's session when there is
+// one. (Ent's generated client.ExecContext calls this; without it raw SQL would
+// bypass the session and its row level security settings.)
+func (d *SessionDriver) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	if s := SessionFromContext(ctx); s != nil {
+		tx, err := s.Tx(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return tx.ExecContext(ctx, query, args...)
+	}
+	return d.DB().ExecContext(ctx, query, args...)
+}
+
+// QueryContext runs a raw query, inside the context's session when there is one.
+func (d *SessionDriver) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	if s := SessionFromContext(ctx); s != nil {
+		tx, err := s.Tx(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return tx.QueryContext(ctx, query, args...)
+	}
+	return d.DB().QueryContext(ctx, query, args...)
+}
+
 // Tx implements dialect.Driver. Inside a session it returns a savepoint-backed
 // nested transaction, so client.Tx(ctx) composes with the request transaction.
 func (d *SessionDriver) Tx(ctx context.Context) (dialect.Tx, error) {

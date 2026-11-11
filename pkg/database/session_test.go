@@ -221,3 +221,34 @@ func TestSessionMiddlewareRollsBackOnError(t *testing.T) {
 		t.Fatalf("expected rollback, got %d rows", got)
 	}
 }
+
+func TestSessionDriverRawQueriesUseTheSession(t *testing.T) {
+	db := openSessionTestDB(t)
+	drv := NewSessionDriver(dialect.SQLite, db)
+	s := NewSession(db, nil)
+	ctx := WithSession(context.Background(), s)
+
+	if _, err := drv.ExecContext(ctx, `INSERT INTO items (name) VALUES ('raw')`); err != nil {
+		t.Fatal(err)
+	}
+	if !s.Started() {
+		t.Fatal("raw ExecContext must run inside the session")
+	}
+	rows, err := drv.QueryContext(ctx, `SELECT COUNT(*) FROM items`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	rows.Next()
+	_ = rows.Scan(&n)
+	_ = rows.Close()
+	if n != 1 {
+		t.Fatalf("raw query should see the uncommitted row, got %d", n)
+	}
+	if err := s.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if got := countItems(t, db); got != 0 {
+		t.Fatalf("rolled back raw insert must not persist, got %d", got)
+	}
+}
