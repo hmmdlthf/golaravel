@@ -64,6 +64,22 @@ func (n *node) incrementPriority(pos int) int {
 	return newPos
 }
 
+// addStaticChild inserts a static child and returns its position.
+//
+// Invariant: children[0:len(indices)] are the static children, in the order
+// of indices, and any wildcard (param / catch-all) child comes after them.
+// Appending a static child after a wildcard child would make indices[i] point
+// at the wrong child, so static routes registered after a sibling parameter
+// route (e.g. "/reorder" after "/:id/...") would never match.
+func (n *node) addStaticChild(c byte, child *node) int {
+	pos := len(n.indices)
+	n.indices += string([]byte{c})
+	n.children = append(n.children, nil)
+	copy(n.children[pos+1:], n.children[pos:])
+	n.children[pos] = child
+	return pos
+}
+
 // addRoute adds a node with the given handle to the path.
 func (n *node) addRoute(path string, handlers []context.HandlerFunc) {
 	fullPath := path
@@ -120,10 +136,8 @@ walk:
 
 			// If adding a static child
 			if c != ':' && c != '*' {
-				n.indices += string([]byte{c})
 				child := &node{}
-				n.children = append(n.children, child)
-				n.incrementPriority(len(n.indices) - 1)
+				n.incrementPriority(n.addStaticChild(c, child))
 				n = child
 				n.insertChild(path, fullPath, handlers)
 				return
@@ -229,8 +243,7 @@ func (n *node) insertChild(path, fullPath string, handlers []context.HandlerFunc
 					path:     path[:i],
 					priority: 1,
 				}
-				n.indices += string([]byte{path[0]})
-				n.children = append(n.children, child)
+				n.addStaticChild(path[0], child)
 				n = child
 			}
 			path = path[i:]

@@ -230,3 +230,42 @@ func BenchmarkRouter_Match_Param(b *testing.B) {
 		_ = r.Match("GET", "/api/v1/users/12345/posts/67890", c)
 	}
 }
+
+func TestRouterStaticRouteRegisteredAfterParamSibling(t *testing.T) {
+	r := New()
+	hit := func(name string) context.HandlerFunc {
+		return func(c *context.Context) error { c.Set("hit", name); return nil }
+	}
+	// parameter route first, static siblings later (the order panels use)
+	r.POST("/r/:id/actions/:action", hit("action"))
+	r.POST("/r/reorder", hit("reorder"))
+	r.POST("/r/bulk", hit("bulk"))
+	r.POST("/r/:id", hit("update"))
+	r.POST("/r/:id/cell", hit("cell"))
+	r.GET("/r/export", hit("export"))
+	r.GET("/r/:id", hit("show"))
+
+	cases := []struct{ method, path, want, id string }{
+		{"POST", "/r/reorder", "reorder", ""},
+		{"POST", "/r/bulk", "bulk", ""},
+		{"POST", "/r/7", "update", "7"},
+		{"POST", "/r/7/cell", "cell", "7"},
+		{"POST", "/r/7/actions/post", "action", "7"},
+		{"GET", "/r/export", "export", ""},
+		{"GET", "/r/9", "show", "9"},
+	}
+	for _, tc := range cases {
+		c := context.NewContext()
+		hs := r.Match(tc.method, tc.path, c)
+		if hs == nil {
+			t.Errorf("%s %s: no match", tc.method, tc.path)
+			continue
+		}
+		c.SetHandlers(hs)
+		_ = c.Next()
+		got, _ := c.Get("hit")
+		if got != tc.want || c.Param("id") != tc.id {
+			t.Errorf("%s %s: got %v id=%q, want %s id=%q", tc.method, tc.path, got, c.Param("id"), tc.want, tc.id)
+		}
+	}
+}
