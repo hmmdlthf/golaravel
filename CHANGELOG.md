@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Security
+- **`Context.ClientIP()` (`pkg/context`)**: it trusted the first `X-Forwarded-For` value from any peer, so clients could spoof their IP (rate limits, logs). Forwarding headers are now only believed when the direct peer is a trusted proxy, and `X-Forwarded-For` is read from the right, skipping trusted hops. The default trusted networks are loopback and private ranges (a reverse proxy on the same host or private network). Configure others with `context.SetTrustedProxies(cidrs...)`; call it with no arguments to ignore forwarding headers. IPv6 `RemoteAddr` values are now returned without brackets.
+
+### Breaking
+- Apps behind a proxy or CDN that connects from **public** addresses (for example Cloudflare) now see the proxy's IP until its ranges are passed to `context.SetTrustedProxies`.
+
 ## [v1.4.1] - 2026-11-11
 
 ### Fixed

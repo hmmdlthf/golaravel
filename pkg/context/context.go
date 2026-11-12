@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/a-h/templ"
 	"github.com/goccy/go-json"
@@ -233,25 +236,108 @@ func (c *Context) Header(key string) string {
 	return c.Request.Header.Get(key)
 }
 
-// ClientIP returns the client's network address, inspecting X-Forwarded-For and X-Real-IP before RemoteAddr.
-func (c *Context) ClientIP() string {
-	if xff := c.Request.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			ip := strings.TrimSpace(parts[0])
-			if ip != "" {
-				return ip
+// defaultTrustedProxies are the peers whose forwarding headers are believed
+// by default: loopback and private networks, i.e. a reverse proxy on the same
+// host or inside the same private network.
+var defaultTrustedProxies = []string{
+	"127.0.0.0/8", "::1/128",
+	"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7",
+}
+
+var trustedProxies atomic.Pointer[[]netip.Prefix]
+
+func init() {
+	if err := SetTrustedProxies(defaultTrustedProxies...); err != nil {
+		panic(err)
+	}
+}
+
+// SetTrustedProxies replaces the networks (CIDRs or single IPs) whose
+// X-Forwarded-For / X-Real-IP headers ClientIP believes. Call it with no
+// arguments to ignore forwarding headers entirely. The default is loopback
+// and private networks. Add your load balancer's or CDN's ranges when it
+// connects from public addresses.
+func SetTrustedProxies(cidrs ...string) error {
+	prefixes := make([]netip.Prefix, 0, len(cidrs))
+	for _, c := range cidrs {
+		c = strings.TrimSpace(c)
+		if !strings.Contains(c, "/") {
+			addr, err := netip.ParseAddr(c)
+			if err != nil {
+				return fmt.Errorf("context: trusted proxy %q: %w", c, err)
 			}
+			prefixes = append(prefixes, netip.PrefixFrom(addr.Unmap(), addr.Unmap().BitLen()))
+			continue
+		}
+		p, err := netip.ParsePrefix(c)
+		if err != nil {
+			return fmt.Errorf("context: trusted proxy %q: %w", c, err)
+		}
+		prefixes = append(prefixes, p.Masked())
+	}
+	trustedProxies.Store(&prefixes)
+	return nil
+}
+
+func isTrustedProxy(addr netip.Addr) bool {
+	addr = addr.Unmap()
+	for _, p := range *trustedProxies.Load() {
+		if p.Contains(addr) {
+			return true
 		}
 	}
-	if xri := c.Request.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
+	return false
+}
+
+func parseIP(s string) (netip.Addr, bool) {
+	s = strings.TrimSpace(s)
+	if h, _, err := net.SplitHostPort(s); err == nil {
+		s = h
 	}
-	ip := c.Request.RemoteAddr
-	if colon := strings.LastIndex(ip, ":"); colon != -1 {
-		ip = ip[:colon]
+	s = strings.Trim(s, "[]")
+	addr, err := netip.ParseAddr(s)
+	if err != nil {
+		return netip.Addr{}, false
 	}
-	return ip
+	return addr.Unmap(), true
+}
+
+// ClientIP returns the client's IP address. X-Forwarded-For and X-Real-IP
+// are only believed when the direct peer (RemoteAddr) is a trusted proxy
+// (see SetTrustedProxies); X-Forwarded-For is then read from the right,
+// skipping trusted proxies, so a client cannot spoof its address by sending
+// the header itself.
+func (c *Context) ClientIP() string {
+	remote, ok := parseIP(c.Request.RemoteAddr)
+	if !ok {
+		host := c.Request.RemoteAddr
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		return host
+	}
+	if !isTrustedProxy(remote) {
+		return remote.String()
+	}
+	if xff := c.Request.Header.Values("X-Forwarded-For"); len(xff) > 0 {
+		hops := strings.Split(strings.Join(xff, ","), ",")
+		client := remote
+		for i := len(hops) - 1; i >= 0; i-- {
+			addr, ok := parseIP(hops[i])
+			if !ok {
+				break
+			}
+			client = addr
+			if !isTrustedProxy(addr) {
+				break
+			}
+		}
+		return client.String()
+	}
+	if xri, ok := parseIP(c.Request.Header.Get("X-Real-IP")); ok {
+		return xri.String()
+	}
+	return remote.String()
 }
 
 // Cookie retrieves the named cookie from the HTTP request.
