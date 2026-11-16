@@ -2,8 +2,10 @@ package privacy
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/golaravel/golaravel/pkg/auth"
 	"github.com/golaravel/golaravel/pkg/context"
@@ -88,7 +90,16 @@ type TenantMiddlewareOptions struct {
 	Required        bool
 	DefaultTenant   string
 	OnMissingTenant func(c *context.Context) error
+	// Authorize confirms the request may act for the resolved tenant (for
+	// example that the signed-in user is a member). Header, query, route
+	// parameter and subdomain resolvers take the tenant from the client,
+	// so without this check any user can switch to another tenant's data.
+	// Returning false answers 403. JWTClaimResolver reads a server-issued
+	// claim and is safe without it.
+	Authorize func(c *context.Context, tenantID string) bool
 }
+
+var warnUnauthorizedTenant sync.Once
 
 // TenantMiddleware inspects requests using the provided resolvers in priority order.
 // Once resolved, it injects the tenant ID into the GoLaravel context and stdlib request context.
@@ -129,6 +140,20 @@ func TenantMiddlewareWithOptions(opts TenantMiddlewareOptions, resolvers ...Tena
 				})
 			}
 			return c.Next()
+		}
+
+		if opts.Authorize != nil {
+			if !opts.Authorize(c, tenantID) {
+				c.AbortWithStatus(http.StatusForbidden)
+				return c.JSON(http.StatusForbidden, map[string]string{
+					"error":   "Tenant Forbidden",
+					"message": "You do not have access to this tenant",
+				})
+			}
+		} else {
+			warnUnauthorizedTenant.Do(func() {
+				slog.Warn("privacy: TenantMiddleware has no Authorize check; the tenant chosen by the client is trusted as-is. Set TenantMiddlewareOptions.Authorize unless the tenant comes from JWTClaimResolver.")
+			})
 		}
 
 		// Inject into GoLaravel context

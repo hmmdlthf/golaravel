@@ -2,8 +2,10 @@ package flutter
 
 import (
 	"bytes"
+	"html"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,18 +100,18 @@ func ServeWeb(r *router.Router, opts ...Options) {
 		if config.Version != "" || config.BuildID != "" {
 			metaTags := ""
 			if config.Version != "" {
-				metaTags += `<meta name="app-version" content="` + config.Version + `">`
+				metaTags += `<meta name="app-version" content="` + html.EscapeString(config.Version) + `">`
 				c.SetHeader("X-App-Version", config.Version)
 			}
 			if config.BuildID != "" {
-				metaTags += `<meta name="app-build-id" content="` + config.BuildID + `">`
+				metaTags += `<meta name="app-build-id" content="` + html.EscapeString(config.BuildID) + `">`
 				c.SetHeader("X-App-Build-ID", config.BuildID)
 			}
 			if strings.Contains(string(content), "<head>") {
 				content = bytes.Replace(content, []byte("<head>"), []byte("<head>\n  "+metaTags), 1)
 			}
 			if config.BuildID != "" {
-				content = bytes.Replace(content, []byte(`src="flutter_bootstrap.js"`), []byte(`src="flutter_bootstrap.js?v=`+config.BuildID+`"`), 1)
+				content = bytes.Replace(content, []byte(`src="flutter_bootstrap.js"`), []byte(`src="flutter_bootstrap.js?v=`+url.QueryEscape(config.BuildID)+`"`), 1)
 			}
 		}
 
@@ -154,7 +156,7 @@ func ServeWeb(r *router.Router, opts ...Options) {
 			content, readErr := os.ReadFile(filePath)
 			if readErr == nil {
 				if config.BuildID != "" {
-					content = bytes.Replace(content, []byte(`"mainJsPath":"main.dart.js"`), []byte(`"mainJsPath":"main.dart.js?v=`+config.BuildID+`"`), -1)
+					content = bytes.Replace(content, []byte(`"mainJsPath":"main.dart.js"`), []byte(`"mainJsPath":"main.dart.js?v=`+url.QueryEscape(config.BuildID)+`"`), -1)
 				}
 				content = bytes.Replace(content, []byte(`serviceWorkerSettings:`), []byte(`/* disabled */ _swSettings:`), -1)
 

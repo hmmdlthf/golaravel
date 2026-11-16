@@ -2,10 +2,12 @@ package storage
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"net/url"
@@ -23,15 +25,28 @@ type LocalDriver struct {
 	secret   []byte
 }
 
+// insecureDefaultSecret is the fallback earlier versions used; it is public.
+const insecureDefaultSecret = "golaravel-storage-default-secret-key-32bytes!!"
+
 // NewLocalDriver creates a storage driver backed by a local directory.
+// secret signs temporary URLs; set it from your application key.
 func NewLocalDriver(basePath, baseURL string, secret ...string) (*LocalDriver, error) {
 	if err := os.MkdirAll(basePath, 0755); err != nil {
 		return nil, fmt.Errorf("storage: failed to create root directory: %w", err)
 	}
 
-	sec := "golaravel-storage-default-secret-key-32bytes!!"
-	if len(secret) > 0 && secret[0] != "" {
+	sec := ""
+	if len(secret) > 0 {
 		sec = secret[0]
+	}
+	if sec == "" || sec == insecureDefaultSecret {
+		// A fixed fallback would let anyone forge signed download and
+		// upload URLs. A random key keeps them safe; they stop working on
+		// restart until APP_KEY (or STORAGE_SECRET) is set.
+		b := make([]byte, 32)
+		_, _ = rand.Read(b)
+		sec = hex.EncodeToString(b)
+		slog.Warn("storage: no signing secret configured (APP_KEY / STORAGE_SECRET); using a random key, so signed URLs end on restart")
 	}
 
 	return &LocalDriver{

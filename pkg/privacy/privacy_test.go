@@ -369,3 +369,32 @@ func TestPrivacy_TenantMiddleware(t *testing.T) {
 		t.Fatalf("expected 403 Forbidden when tenant missing, got %d", w5.Code)
 	}
 }
+
+func TestTenantMiddlewareAuthorize(t *testing.T) {
+	members := map[string]bool{"acme": true}
+	mw := TenantMiddlewareWithOptions(TenantMiddlewareOptions{
+		Required:  true,
+		Authorize: func(c *gcontext.Context, tenantID string) bool { return members[tenantID] },
+	}, HeaderResolver())
+
+	run := func(tenant string) (int, string) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("X-Tenant-ID", tenant)
+		c := gcontext.NewContext()
+		c.Reset(rec, req)
+		seen := ""
+		c.SetHandlers([]gcontext.HandlerFunc{mw, func(c *gcontext.Context) error {
+			seen, _ = TenantFromContext(c.Context())
+			return c.String(200, "ok")
+		}})
+		_ = c.Next()
+		return rec.Code, seen
+	}
+	if code, seen := run("acme"); code != 200 || seen != "acme" {
+		t.Fatalf("member tenant: %d %q", code, seen)
+	}
+	if code, seen := run("globex"); code != 403 || seen != "" {
+		t.Fatalf("foreign tenant must be refused before the handler: %d %q", code, seen)
+	}
+}
