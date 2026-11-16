@@ -16,6 +16,12 @@ type MountOptions struct {
 	ReadyzPath    string // default: "/readyz"
 	Registry      *Registry
 	HealthChecker *HealthRegistry
+	// Authorize, when set, guards the metrics endpoint and the detailed
+	// health report (and the report attached to a failing /readyz). The
+	// liveness and readiness status stay public for load balancers and
+	// orchestrators. Without it every endpoint is public, so mount them on
+	// an internal listener or behind your own middleware.
+	Authorize func(c *context.Context) bool
 }
 
 // Mount mounts the standard Prometheus and Health Check endpoints onto the router.
@@ -42,6 +48,7 @@ func Mount(r router.RouteRegistrar, opts ...MountOptions) {
 		}
 		cfg.Registry = o.Registry
 		cfg.HealthChecker = o.HealthChecker
+		cfg.Authorize = o.Authorize
 	}
 
 	reg := cfg.Registry
@@ -54,8 +61,16 @@ func Mount(r router.RouteRegistrar, opts ...MountOptions) {
 		health = DefaultHealth()
 	}
 
+	allowed := func(c *context.Context) bool { return cfg.Authorize == nil || cfg.Authorize(c) }
+	forbidden := func(c *context.Context) error {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "Forbidden"})
+	}
+
 	// 1. Prometheus Metrics Endpoint
 	r.Get(cfg.MetricsPath, func(c *context.Context) error {
+		if !allowed(c) {
+			return forbidden(c)
+		}
 		metricsText := reg.RenderPrometheus()
 		c.SetHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 		return c.String(http.StatusOK, "%s", metricsText)
@@ -63,6 +78,9 @@ func Mount(r router.RouteRegistrar, opts ...MountOptions) {
 
 	// 2. Full Health Report Endpoint
 	r.Get(cfg.HealthPath, func(c *context.Context) error {
+		if !allowed(c) {
+			return forbidden(c)
+		}
 		report := health.Run(c.Request.Context())
 		status := http.StatusOK
 		if report.Status == StatusUnhealthy {
@@ -82,11 +100,14 @@ func Mount(r router.RouteRegistrar, opts ...MountOptions) {
 	r.Get(cfg.ReadyzPath, func(c *context.Context) error {
 		report := health.Run(c.Request.Context())
 		if report.Status == StatusUnhealthy {
-			return c.JSON(http.StatusServiceUnavailable, map[string]any{
+			body := map[string]any{
 				"status": "not_ready",
 				"reason": "one or more critical subsystems unhealthy",
-				"report": report,
-			})
+			}
+			if allowed(c) {
+				body["report"] = report
+			}
+			return c.JSON(http.StatusServiceUnavailable, body)
 		}
 		return c.JSON(http.StatusOK, map[string]string{
 			"status": "ready",
