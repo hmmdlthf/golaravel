@@ -658,22 +658,42 @@ func makeOAuth(args []string) error {
 	tmpl := `package handlers
 
 import (
-	"fmt"
+	stdctx "context"
+	"errors"
 	"net/http"
 
+	"github.com/golaravel/golaravel/pkg/auth"
 	"github.com/golaravel/golaravel/pkg/auth/oauth"
 	"github.com/golaravel/golaravel/pkg/context"
 	"github.com/golaravel/golaravel/pkg/router"
 )
 
-// {{NAME}}OAuthController handles OAuth2 authentication for {{NAME}}.
+// {{NAME}}OAuthController handles "Sign in with {{NAME}}".
 type {{NAME}}OAuthController struct {
-	// Add your Ent database client or dependencies here
+	// FindOrCreate returns your application's user for a {{NAME}} profile,
+	// creating it on first sign-in. Look users up by the provider and the
+	// provider's user ID (profile.Provider + profile.ID, stored on your user
+	// record), not by email alone: linking an existing account just because
+	// the email matches lets anyone who controls that address at the
+	// provider take the account over.
+	FindOrCreate func(ctx stdctx.Context, profile *oauth.User) (auth.Authenticatable, error)
+
+	// JWT issues the application's own token after sign-in.
+	JWT *auth.JWTManager
 }
 
-// New{{NAME}}OAuthController creates a new {{NAME}}OAuthController instance.
-func New{{NAME}}OAuthController() *{{NAME}}OAuthController {
-	return &{{NAME}}OAuthController{}
+// New{{NAME}}OAuthController creates the controller.
+//
+//	ctrl := handlers.New{{NAME}}OAuthController(jwt, func(ctx stdctx.Context, p *oauth.User) (auth.Authenticatable, error) {
+//		u, err := db.User.Query().Where(user.Provider(p.Provider), user.ProviderID(p.ID)).Only(ctx)
+//		if ent.IsNotFound(err) {
+//			return db.User.Create().SetProvider(p.Provider).SetProviderID(p.ID).
+//				SetEmail(p.Email).SetName(p.Name).SetAvatar(p.Avatar).Save(ctx)
+//		}
+//		return u, err
+//	})
+func New{{NAME}}OAuthController(jwt *auth.JWTManager, findOrCreate func(ctx stdctx.Context, profile *oauth.User) (auth.Authenticatable, error)) *{{NAME}}OAuthController {
+	return &{{NAME}}OAuthController{FindOrCreate: findOrCreate, JWT: jwt}
 }
 
 // RegisterRoutes registers the redirect and callback endpoints.
@@ -682,34 +702,41 @@ func (ctrl *{{NAME}}OAuthController) RegisterRoutes(r router.RouteRegistrar) {
 	r.Get("/auth/{{SLUG}}/callback", ctrl.Callback)
 }
 
-// Redirect initiates the OAuth2 redirect to {{NAME}}.
+// Redirect sends the user to {{NAME}} to sign in.
 func (ctrl *{{NAME}}OAuthController) Redirect(c *context.Context) error {
 	return oauth.Driver("{{SLUG}}").Redirect(c)
 }
 
-// Callback handles the provider callback, synchronizes user in database, and issues session/token.
+// Callback finishes the sign-in: it verifies the provider's answer, finds
+// or creates the user and returns the application's token. The provider's
+// own access token is never sent to the client.
 func (ctrl *{{NAME}}OAuthController) Callback(c *context.Context) error {
-	socialUser, err := oauth.Driver("{{SLUG}}").User(c)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{
-			"error":   "oauth_error",
-			"message": err.Error(),
-		})
+	if ctrl.FindOrCreate == nil || ctrl.JWT == nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "oauth_not_configured"})
 	}
-
-	// TODO: Find or create user in Ent database:
-	// user, err := db.User.Query().Where(user.Email(socialUser.Email)).Only(c.Request.Context())
-	// if ent.IsNotFound(err) {
-	//     user, err = db.User.Create().
-	//         SetEmail(socialUser.Email).
-	//         SetName(socialUser.Name).
-	//         SetAvatar(socialUser.Avatar).
-	//         Save(c.Request.Context())
-	// }
-
+	profile, err := oauth.Driver("{{SLUG}}").User(c)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "oauth_error", "message": err.Error()})
+	}
+	user, err := ctrl.FindOrCreate(c.Request.Context(), profile)
+	if err != nil || user == nil {
+		if err == nil {
+			err = errors.New("no user")
+		}
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "sign_in_refused", "message": err.Error()})
+	}
+	token, err := ctrl.JWT.GenerateToken(user.GetAuthIdentifier())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "token_error"})
+	}
 	return c.JSON(http.StatusOK, map[string]any{
-		"message": fmt.Sprintf("Authenticated via %s successfully", "{{NAME}}"),
-		"user":    socialUser,
+		"token": token,
+		"user": map[string]string{
+			"id":     user.GetAuthIdentifier(),
+			"name":   profile.Name,
+			"email":  profile.Email,
+			"avatar": profile.Avatar,
+		},
 	})
 }
 `

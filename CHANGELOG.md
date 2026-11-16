@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Request body read timeout**: `Engine.BodyReadTimeout` (default 2 minutes) and `middleware.BodyReadTimeout(d)` per route. Upgrade requests and requests without a body are not affected, and the deadline is cleared once the body has been read, so slow handlers and SSE streams keep working.
+- **Cache stampede protection**: `Remember` runs the function once for concurrent misses (per process, and across instances on the SQL / Redis stores through a backend lock; `RememberLockTimeout`).
+- **Atomic `Pull`** on the SQL and Redis stores (`Puller`; Redis `GETDEL`).
+- **Validation**: `validation.Password()` (min / max / letters / mixed case / numbers / symbols / not-in list, one message per unmet requirement; `MultiRule`), `exclude`, `exclude_if`, `exclude_unless`, `exclude_with`, `exclude_without`, `required_array_keys`, and `dimensions` (PNG, JPEG, GIF).
+
+### Changed
+- **`artisan make:oauth`** now generates a working controller: a `FindOrCreate` hook, with a warning against linking accounts by email alone, issues the app's JWT instead of returning the provider profile and its access token. A test checks the generated code compiles.
+
+### Fixed
+- Routes with more than 127 handlers overflowed the `int8` chain index.
+
 ## [v1.11.0] - 2026-11-16
 
 ### Added

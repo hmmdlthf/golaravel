@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -350,5 +351,37 @@ func TestMakeLang_Scaffolding(t *testing.T) {
 		if _, err := os.Stat(f); os.IsNotExist(err) {
 			t.Errorf("expected scaffolded file %s does not exist", f)
 		}
+	}
+}
+
+// The generated OAuth controller must compile against the current API.
+func TestMakeOAuth_GeneratedCodeCompiles(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs go vet")
+	}
+	targetFile := "app/handlers/discord_oauth_controller.go"
+	_ = os.Remove(targetFile)
+	defer os.Remove(targetFile)
+	if err := makeOAuth([]string{"Discord"}); err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.ReadFile(targetFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join("testdata", "oauthgen")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll("testdata")
+	if err := os.WriteFile(filepath.Join(dir, "controller.go"), src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("go", "vet", "./"+filepath.ToSlash(dir)).CombinedOutput()
+	if err != nil {
+		t.Fatalf("generated controller does not compile:\n%s", out)
+	}
+	if strings.Contains(string(src), "TODO") || strings.Contains(string(src), `"user":    socialUser`) {
+		t.Fatal("template still has the TODO or leaks the provider profile")
 	}
 }
