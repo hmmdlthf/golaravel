@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Security
+- **2FA bypass (`pkg/auth`)**: the `two_factor_token` returned after a correct password (before the second factor) was signed with the same secret as access tokens, so `BearerGuard` / `CookieGuard` accepted it as a full login. Two-factor authentication could be skipped entirely. Challenge tokens now use a derived key and their own audience, and the guards refuse them.
+- **Auth workflows (`WorkflowController`)**:
+  - **Throttling:** logins and 2FA codes are throttled through the `ratelimit` store (`LoginAttempts` / `LoginWindow`, `TwoFactorAttempts` / `TwoFactorWindow`). A 6-digit code can no longer be brute-forced.
+  - **Account enumeration:** unknown emails take as long to reject as wrong passwords.
+  - **Codes:** TOTP codes are single-use (`TOTPManager.VerifyCodeStep`). Recovery codes are refused when `UpdateRecoveryCodes` is not configured (they would never be used up), and no token is issued without a verified factor.
+  - **Password resets:** only existing accounts get reset mail, the reply is the same either way, mails are throttled per address, and the reset link is URL-encoded.
+  - **Disabling 2FA** requires the current password or a 2FA code.
+  - **Errors:** callback errors are no longer sent to the client. Passwords over 72 bytes (the bcrypt limit) get a validation error instead of a 500.
+- **OAuth**: the `state` and PKCE cookies are `Secure` on HTTPS.
+
+### Fixed
+- **Panics** in scheduled tasks (including `RunInBackground`), async event listeners and queue jobs crashed the process. They are now recovered: tasks report an error, and jobs are retried or sent to the dead-letter queue.
+- **`schedule`**: `Exec` keeps only the last 64 KiB of command output. `OnOneServer` logs a warning when the default cache is the in-memory store, since it then only prevents duplicates within one process.
+
+### Breaking
+- **`POST /auth/two-factor/disable`** needs `password` or `code` in the body.
+- **Recovery codes** are refused unless `WorkflowCallbacks.UpdateRecoveryCodes` is set.
+- **Forgot-password** sends no mail when `FindByEmail` finds no user (the response is unchanged).
+- **Existing 2FA challenge tokens** stop working (they expire within 5 minutes anyway).
+
 ## [v1.14.0] - 2026-11-16
 
 ### Security
