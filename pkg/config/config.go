@@ -55,28 +55,54 @@ func (s *Store) LoadEnv(filenames ...string) error {
 				continue
 			}
 
+			line = strings.TrimPrefix(line, "export ")
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) != 2 {
 				continue
 			}
 
 			key := strings.TrimSpace(parts[0])
-			val := strings.TrimSpace(parts[1])
-
-			// Strip quotes if wrapped
-			if len(val) >= 2 && ((val[0] == '"' && val[len(val)-1] == '"') || (val[0] == '\'' && val[len(val)-1] == '\'')) {
-				val = val[1 : len(val)-1]
-			}
+			val := parseEnvValue(strings.TrimSpace(parts[1]))
 
 			s.values[key] = val
 			if os.Getenv(key) == "" {
 				_ = os.Setenv(key, val)
 			}
 		}
+		err = scanner.Err()
 		_ = file.Close()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
+}
+
+// parseEnvValue handles quoting and comments:
+//
+//	KEY=value # comment   -> value
+//	KEY="a # b"           -> a # b
+//	KEY="line\nbreak"     -> line, newline, break (double quotes only)
+//	KEY='raw \n'          -> raw \n
+func parseEnvValue(val string) string {
+	if len(val) >= 2 {
+		switch q := val[0]; q {
+		case '"', '\'':
+			if end := closingQuote(val, q); end > 0 {
+				inner := val[1:end]
+				if q == '"' {
+					inner = strings.NewReplacer(`\n`, "\n", `\"`, `"`, `\\`, `\`).Replace(inner)
+				}
+				return inner
+			}
+		}
+	}
+	// Unquoted: " #" starts a comment.
+	if i := strings.Index(val, " #"); i >= 0 {
+		val = strings.TrimSpace(val[:i])
+	}
+	return val
 }
 
 // Set sets a configuration key-value pair.
@@ -134,8 +160,23 @@ func (s *Store) GetDuration(key string, defaultValue time.Duration) time.Duratio
 }
 
 // Global helper accessors
-func Get(key, defaultValue string) string             { return globalStore.Get(key, defaultValue) }
-func GetInt(key string, defaultValue int) int         { return globalStore.GetInt(key, defaultValue) }
-func GetBool(key string, defaultValue bool) bool      { return globalStore.GetBool(key, defaultValue) }
+func Get(key, defaultValue string) string                   { return globalStore.Get(key, defaultValue) }
+func GetInt(key string, defaultValue int) int               { return globalStore.GetInt(key, defaultValue) }
+func GetBool(key string, defaultValue bool) bool            { return globalStore.GetBool(key, defaultValue) }
 func GetDuration(key string, d time.Duration) time.Duration { return globalStore.GetDuration(key, d) }
-func Set(key, value string)                           { globalStore.Set(key, value) }
+func Set(key, value string)                                 { globalStore.Set(key, value) }
+
+// closingQuote returns the index of the quote closing val[0], skipping
+// backslash-escaped quotes inside double quotes; -1 when unterminated.
+func closingQuote(val string, q byte) int {
+	for i := 1; i < len(val); i++ {
+		if q == '"' && val[i] == '\\' {
+			i++
+			continue
+		}
+		if val[i] == q {
+			return i
+		}
+	}
+	return -1
+}

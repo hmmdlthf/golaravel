@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -36,6 +37,39 @@ type Engine struct {
 	middlewares []gcontext.HandlerFunc
 	maxBody     int64
 	bodyTimeout time.Duration
+	noOverride  bool
+}
+
+// MethodOverride turns form method spoofing on or off (on by default). A
+// POST with a "_method" form field (see view.Method) or an
+// X-HTTP-Method-Override header of PUT, PATCH or DELETE is routed as that
+// method, so HTML forms can reach those routes. Other methods are ignored.
+func (app *Engine) MethodOverride(enabled bool) *Engine {
+	app.noOverride = !enabled
+	return app
+}
+
+// overrideMethod applies method spoofing before routing.
+func overrideMethod(r *http.Request) {
+	if r.Method != http.MethodPost {
+		return
+	}
+	m := r.Header.Get("X-HTTP-Method-Override")
+	if m == "" {
+		ct := r.Header.Get("Content-Type")
+		if strings.HasPrefix(ct, "application/x-www-form-urlencoded") || strings.HasPrefix(ct, "multipart/form-data") {
+			if strings.HasPrefix(ct, "multipart/") {
+				_ = r.ParseMultipartForm(32 << 20)
+			} else {
+				_ = r.ParseForm()
+			}
+			m = r.PostFormValue("_method")
+		}
+	}
+	switch strings.ToUpper(strings.TrimSpace(m)) {
+	case http.MethodPut, http.MethodPatch, http.MethodDelete:
+		r.Method = strings.ToUpper(strings.TrimSpace(m))
+	}
 }
 
 // DefaultBodyReadTimeout limits how long reading a request body may take
@@ -121,6 +155,9 @@ func (app *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if ctl.SetReadDeadline(time.Now().Add(app.bodyTimeout)) == nil {
 			r.Body = &deadlineBody{ReadCloser: r.Body, ctl: ctl}
 		}
+	}
+	if !app.noOverride {
+		overrideMethod(r)
 	}
 	c := app.pool.Get().(*gcontext.Context)
 	c.Reset(w, r)
