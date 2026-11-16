@@ -189,7 +189,7 @@ app.Use(middleware.CORS(middleware.DefaultCORS()))
 app.Use(middleware.CSRF())
 
 // In-Memory Token Bucket Rate Limiting (e.g. 60 requests/minute per IP)
-app.Use(middleware.RateLimiter(60))
+app.Use(ratelimit.ThrottleMax(60, time.Minute)) // see docs/rate-limiting-and-throttling.md
 ```
 
 ## Password reset tokens across restarts and instances

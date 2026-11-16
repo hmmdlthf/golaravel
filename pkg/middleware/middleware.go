@@ -7,10 +7,10 @@ import (
 	"os"
 	"runtime/debug"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/golaravel/golaravel/pkg/context"
+	"github.com/golaravel/golaravel/pkg/ratelimit"
 )
 
 // Recovery returns a middleware that recovers from any panics and writes a 500 response.
@@ -212,68 +212,12 @@ func SecureHeaders(opts ...SecureHeadersOptions) context.HandlerFunc {
 	}
 }
 
-// RateLimiter implements a fast in-memory token bucket rate limiter per client IP.
+// RateLimiter limits each client IP to requestsPerMinute requests per
+// minute (sliding window).
+//
+// Deprecated: use ratelimit.ThrottleMax or ratelimit.Throttle, which this
+// now delegates to. They use the configured ratelimit store, so with
+// ratelimit.SetStore(redis store) the limit is shared by every instance.
 func RateLimiter(requestsPerMinute int) context.HandlerFunc {
-	type clientBucket struct {
-		tokens    float64
-		lastCheck time.Time
-	}
-
-	var mu sync.Mutex
-	clients := make(map[string]*clientBucket, 1024)
-	rate := float64(requestsPerMinute) / 60.0
-	capacity := float64(requestsPerMinute)
-	lastSweep := time.Now()
-
-	return func(c *context.Context) error {
-		// ClientIP honours trusted proxies (context.SetTrustedProxies), so
-		// clients behind a reverse proxy do not share one bucket.
-		ip := c.ClientIP()
-
-		now := time.Now()
-
-		mu.Lock()
-		// Forget clients whose bucket has refilled, so the map cannot grow
-		// without bound.
-		if now.Sub(lastSweep) > time.Minute {
-			for k, b := range clients {
-				if now.Sub(b.lastCheck) > time.Minute {
-					delete(clients, k)
-				}
-			}
-			lastSweep = now
-		}
-		bucket, exists := clients[ip]
-		if !exists {
-			bucket = &clientBucket{
-				tokens:    capacity - 1,
-				lastCheck: now,
-			}
-			clients[ip] = bucket
-			mu.Unlock()
-			return c.Next()
-		}
-
-		elapsed := now.Sub(bucket.lastCheck).Seconds()
-		bucket.lastCheck = now
-		bucket.tokens += elapsed * rate
-		if bucket.tokens > capacity {
-			bucket.tokens = capacity
-		}
-
-		if bucket.tokens < 1.0 {
-			mu.Unlock()
-			c.SetHeader("Retry-After", "1")
-			c.AbortWithStatus(http.StatusTooManyRequests)
-			return c.JSON(http.StatusTooManyRequests, map[string]string{
-				"error":   "Too Many Requests",
-				"message": "Rate limit exceeded. Please retry later.",
-			})
-		}
-
-		bucket.tokens -= 1.0
-		mu.Unlock()
-
-		return c.Next()
-	}
+	return ratelimit.ThrottleMax(requestsPerMinute, time.Minute)
 }
