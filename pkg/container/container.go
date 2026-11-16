@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"sync/atomic"
 )
 
 // BindingType defines whether a dependency is a singleton, transient factory, or instance.
@@ -21,6 +22,10 @@ type binding struct {
 	factory  any
 	instance any
 	lock     sync.Mutex
+	// ready is set (after instance) once a singleton is built, so the fast
+	// path can read instance without a data race, and a singleton whose
+	// value is nil is not rebuilt on every resolve.
+	ready atomic.Bool
 }
 
 // Container defines the type-safe dependency injection container.
@@ -108,14 +113,14 @@ func Resolve[T any](c *Container) (T, error) {
 		return fn(c)
 
 	case BindingSingleton:
-		// Double-checked locking for thread-safe singleton initialization
-		if b.instance != nil {
+		// Double-checked locking; the atomic flag publishes instance safely.
+		if b.ready.Load() {
 			return b.instance.(T), nil
 		}
 		b.lock.Lock()
 		defer b.lock.Unlock()
 
-		if b.instance != nil {
+		if b.ready.Load() {
 			return b.instance.(T), nil
 		}
 
@@ -126,6 +131,7 @@ func Resolve[T any](c *Container) (T, error) {
 			return zero, fmt.Errorf("container: failed to initialize singleton %s: %w", t, err)
 		}
 		b.instance = inst
+		b.ready.Store(true)
 		return inst, nil
 
 	default:

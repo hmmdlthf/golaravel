@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **CI (`.github/workflows/ci.yml`)**: every pull request and push to master runs `go vet` and `go test -race ./...`, plus an integration job against real MySQL 8.4, Postgres 17 and Redis 7.
+- **Integration tests (`integration/`, a separate module)** run on whichever backends are configured (`GOLARAVEL_TEST_MYSQL_DSN`, `GOLARAVEL_TEST_POSTGRES_DSN`, `GOLARAVEL_TEST_REDIS_ADDR`); SQLite always runs. They cover:
+  - the SQL and Redis session drivers;
+  - the SQL and Redis cache stores, including concurrent increments, tags and locks shared between two instances;
+  - validation `unique` / `exists`;
+  - the Redis client;
+  - the queue and rate limiter Redis code.
+
+### Fixed
+- **Container singletons (`pkg/container`)**: double-checked locking read `instance` without synchronization (a data race the new `-race` CI run found), and a singleton whose value was nil was rebuilt on every resolve. An atomic ready flag fixes both.
+- **SQL cache locks on MySQL**: re-acquiring a lock without expiry by its own owner returned false, because MySQL counts an UPDATE that changes nothing as 0 affected rows. The owner is now checked directly.
+
 ## [v1.9.0] - 2026-11-16
 
 ### Added

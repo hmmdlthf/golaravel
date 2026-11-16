@@ -190,7 +190,20 @@ func (b *SQLBackend) Acquire(name, owner string, duration time.Duration) (bool, 
 		return false, err
 	}
 	n, err := res.RowsAffected()
-	return n == 1, err
+	if err != nil || n == 1 {
+		return n == 1, err
+	}
+	// MySQL reports 0 affected rows for an UPDATE that changes nothing (a
+	// lock without expiry refreshed by its owner), so check the owner.
+	var cur string
+	var curExp int64
+	if err := b.db.QueryRowContext(ctx, b.d.Rebind(fmt.Sprintf("SELECT owner, expires_at FROM %s WHERE name = ?", b.locks)), name).Scan(&cur, &curExp); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return cur == owner && live(curExp), nil
 }
 
 // Release frees the lock; ErrLockNotOwned if another owner holds it.

@@ -112,3 +112,17 @@ func BenchmarkContainer_Resolve_Singleton(b *testing.B) {
 		_ = MustResolve[*DatabaseService](c)
 	}
 }
+
+func TestSingletonWithNilValueIsBuiltOnce(t *testing.T) {
+	c := New()
+	calls := 0
+	Singleton[*int](c, func(*Container) (*int, error) { calls++; return nil, nil })
+	for i := 0; i < 3; i++ {
+		if v, err := Resolve[*int](c); err != nil || v != nil {
+			t.Fatalf("resolve: %v %v", v, err)
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("factory ran %d times, want 1", calls)
+	}
+}

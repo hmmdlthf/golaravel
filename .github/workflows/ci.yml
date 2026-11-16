@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test -race -count=1 ./...
+
+  integration:
+    name: Integration (MySQL, Postgres, Redis)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: golaravel
+          MYSQL_DATABASE: golaravel
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pgolaravel"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: golaravel
+          POSTGRES_DB: golaravel
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      GOLARAVEL_INTEGRATION_REQUIRED: "1"
+      GOLARAVEL_TEST_MYSQL_DSN: root:golaravel@tcp(127.0.0.1:3306)/golaravel
+      GOLARAVEL_TEST_POSTGRES_DSN: postgres://postgres:golaravel@127.0.0.1:5432/golaravel?sslmode=disable
+      GOLARAVEL_TEST_REDIS_ADDR: 127.0.0.1:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: integration/go.mod
+          cache-dependency-path: integration/go.sum
+      - name: Integration tests
+        working-directory: integration
+        run: go test -count=1 -v ./...
