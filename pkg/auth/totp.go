@@ -94,6 +94,32 @@ func (m *TOTPManager) GenerateCode(secret string, at ...time.Time) (string, erro
 }
 
 // VerifyCode verifies a TOTP code against the secret, taking into account clock skew.
+// VerifyCodeStep is VerifyCode that also returns the matched time step,
+// so callers can refuse a second use of the same code.
+func (m *TOTPManager) VerifyCodeStep(secret, code string, at ...time.Time) (bool, int64) {
+	cleanCode := strings.TrimSpace(code)
+	if len(cleanCode) != m.opts.Digits {
+		return false, 0
+	}
+	key, err := decodeBase32Secret(secret)
+	if err != nil {
+		return false, 0
+	}
+	t := time.Now()
+	if len(at) > 0 {
+		t = at[0]
+	}
+	counter := int64(t.Unix() / int64(m.opts.Period.Seconds()))
+	skew := int64(m.opts.SkewWindow)
+	for i := -skew; i <= skew; i++ {
+		candidate := computeTOTP(key, uint64(counter+i), m.opts.Digits)
+		if subtle.ConstantTimeCompare([]byte(candidate), []byte(cleanCode)) == 1 {
+			return true, counter + i
+		}
+	}
+	return false, 0
+}
+
 func (m *TOTPManager) VerifyCode(secret, code string, at ...time.Time) bool {
 	cleanCode := strings.TrimSpace(code)
 	if len(cleanCode) != m.opts.Digits {
