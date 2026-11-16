@@ -1,7 +1,9 @@
 package cache
 
 import (
+	"errors"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golaravel/golaravel/pkg/redis"
@@ -117,4 +119,20 @@ func (b *RedisBackend) Release(name, owner string) error {
 		return ErrLockNotOwned
 	}
 	return nil
+}
+
+const getDelScript = `local v = redis.call("get", KEYS[1]) if v then redis.call("del", KEYS[1]) end return v`
+
+// PullRaw reads and deletes a key atomically (GETDEL, or a script on Redis
+// older than 6.2).
+func (b *RedisBackend) PullRaw(key string) ([]byte, bool, error) {
+	v, ok, err := redis.String(b.c.Do("GETDEL", b.prefix+key))
+	var re redis.Error
+	if errors.As(err, &re) && strings.Contains(strings.ToLower(string(re)), "unknown command") {
+		v, ok, err = redis.String(b.c.Do("EVAL", getDelScript, "1", b.prefix+key))
+	}
+	if err != nil || !ok {
+		return nil, false, err
+	}
+	return []byte(v), true, nil
 }

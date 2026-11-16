@@ -29,8 +29,16 @@ type Backend interface {
 // float64, map[string]any and []any. Tag versions live in the backend, so
 // tag flushes reach every instance sharing it.
 type BackendStore struct {
-	b    Backend
-	tags *TagManager
+	b       Backend
+	tags    *TagManager
+	flights flightGroup
+}
+
+// Puller is implemented by backends that can read and delete a key in one
+// atomic step; BackendStore.Pull uses it so two instances never both get
+// the same value.
+type Puller interface {
+	PullRaw(key string) ([]byte, bool, error)
 }
 
 // NewBackendStore wraps a Backend into a Store.
@@ -168,31 +176,70 @@ func (s *BackendStore) Forget(key string) error { return s.b.Delete(key) }
 
 func (s *BackendStore) Flush() error { return s.b.Flush() }
 
+// Remember returns the cached value or computes, stores and returns it.
+//
+// Stampede protection: callers in this process that miss the same key
+// share one computation, and across instances a lock in the backend lets
+// one compute while the others wait (up to RememberLockTimeout) for its
+// result.
 func (s *BackendStore) Remember(key string, ttl time.Duration, fn func() (any, error)) (any, error) {
 	if v, ok := s.Get(key); ok {
 		return v, nil
 	}
-	v, err := fn()
-	if err != nil {
-		return nil, err
-	}
-	if err := s.Put(key, v, ttl); err != nil {
-		return nil, err
-	}
-	// Return what later reads will see (JSON-decoded), not fn's value.
-	if got, ok := s.Get(key); ok {
-		return got, nil
-	}
-	return v, nil
+	return s.flights.do(key, func() (any, error) {
+		lock := s.Lock("remember:"+key, RememberLockTimeout)
+		got, _ := lock.Acquire()
+		if got {
+			defer func() { _ = lock.Release() }()
+		} else {
+			// Another instance is computing it: wait for its result.
+			deadline := time.Now().Add(RememberLockTimeout)
+			for wait := 10 * time.Millisecond; time.Now().Before(deadline); {
+				if v, ok := s.Get(key); ok {
+					return v, nil
+				}
+				if ok, _ := lock.Acquire(); ok {
+					defer func() { _ = lock.Release() }()
+					break
+				}
+				time.Sleep(wait)
+				if wait < 200*time.Millisecond {
+					wait *= 2
+				}
+			}
+		}
+		if v, ok := s.Get(key); ok {
+			return v, nil
+		}
+		v, err := fn()
+		if err != nil {
+			return nil, err
+		}
+		if err := s.Put(key, v, ttl); err != nil {
+			return nil, err
+		}
+		// Return what later reads will see (JSON-decoded), not fn's value.
+		if got, ok := s.Get(key); ok {
+			return got, nil
+		}
+		return v, nil
+	})
 }
 
 func (s *BackendStore) RememberForever(key string, fn func() (any, error)) (any, error) {
 	return s.Remember(key, 0, fn)
 }
 
-// Pull reads and deletes a value. It is not atomic across instances.
+// Pull reads and deletes a value. With the SQL and Redis backends this is
+// atomic: when several instances pull the same key, only one gets it.
 func (s *BackendStore) Pull(key string, defaultVal ...any) any {
-	if v, ok := s.Get(key); ok {
+	if p, ok := s.b.(Puller); ok {
+		if raw, found, err := p.PullRaw(key); err == nil && found {
+			if v, err := decodeValue(raw); err == nil {
+				return v
+			}
+		}
+	} else if v, ok := s.Get(key); ok {
 		_ = s.b.Delete(key)
 		return v
 	}
