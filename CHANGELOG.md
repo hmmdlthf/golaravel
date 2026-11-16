@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.7.0] - 2026-11-16
 
 ### Security
 - **Mail header injection (`pkg/mail`)**: the subject, From/To/Cc/Bcc/Reply-To, custom headers and attachment filenames were written into the message headers as-is. A line break in user input (for example a contact-form name or subject) could add headers such as `Bcc` and turn the app into a spam relay. `BuildMIME` now returns `ErrInvalidHeader` for line breaks, unparsable addresses and invalid header names.
