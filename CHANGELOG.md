@@ -18,7 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - the Redis client;
   - the queue and rate limiter Redis code.
 
+### Changed
+- **One Redis client.** `pkg/queue` and `pkg/ratelimit` now use the shared `pkg/redis` client instead of their own copies. The queue's copy put a connection back into the pool after a network error, so later commands could read a half-finished reply. Blocking pops use the new `Client.DoTimeout`. `redis.Open` creates a client without contacting the server.
+- `ratelimit.RedisStore.Clear` uses `SCAN` instead of `KEYS`, so it doesn't block a large Redis. New `RedisStore.Close`.
+
 ### Fixed
+- **Redis rate limiter could be exceeded.** `Hit` counted and then added in separate commands, so concurrent requests (for example a burst of login attempts across instances) could all pass the limit. The trim, count and add now run in one Lua script; 50 concurrent hits with a limit of 10 admit exactly 10.
+- **Delayed jobs on custom queues never ran.** The Redis queue only moved due jobs for `default`, `high` and `low`; now it moves them for every queue `Later` was called with. Only the worker whose `ZREM` removed a job pushes it, so two workers can't run the same delayed job twice.
 - **Container singletons (`pkg/container`)**: double-checked locking read `instance` without synchronization (a data race the new `-race` CI run found), and a singleton whose value was nil was rebuilt on every resolve. An atomic ready flag fixes both.
 - **SQL cache `Increment` on Postgres** (found by the new integration run): two concurrent first increments of a new key could both read 0, losing an update, because `SELECT ... FOR UPDATE` locks nothing when the row is missing. The row is now inserted before it is locked, and increments retry on deadlocks and serialization failures.
 - **SQL cache locks on MySQL**: re-acquiring a lock without expiry by its own owner returned false, because MySQL counts an UPDATE that changes nothing as 0 affected rows. The owner is now checked directly.

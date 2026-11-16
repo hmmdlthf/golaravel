@@ -50,6 +50,16 @@ type conn struct {
 
 // New creates a client and checks the server answers PING.
 func New(cfg Config) (*Client, error) {
+	c := Open(cfg)
+	if _, err := c.Do("PING"); err != nil {
+		return nil, fmt.Errorf("redis: connect to %s: %w", c.cfg.Addr, err)
+	}
+	return c, nil
+}
+
+// Open creates a client without contacting the server; connections are
+// made on first use.
+func Open(cfg Config) *Client {
 	if cfg.Addr == "" {
 		cfg.Addr = "127.0.0.1:6379"
 	}
@@ -59,11 +69,7 @@ func New(cfg Config) (*Client, error) {
 	if cfg.PoolSize <= 0 {
 		cfg.PoolSize = 10
 	}
-	c := &Client{cfg: cfg, idle: make(chan *conn, cfg.PoolSize)}
-	if _, err := c.Do("PING"); err != nil {
-		return nil, fmt.Errorf("redis: connect to %s: %w", cfg.Addr, err)
-	}
-	return c, nil
+	return &Client{cfg: cfg, idle: make(chan *conn, cfg.PoolSize)}
 }
 
 func (c *Client) dial() (*conn, error) {
@@ -124,11 +130,17 @@ func (c *Client) put(cn *conn) {
 // strings), int64, []any, or nil for a null reply. A server error reply is
 // returned as Error.
 func (c *Client) Do(args ...string) (any, error) {
+	return c.DoTimeout(0, args...)
+}
+
+// DoTimeout is Do for blocking commands (BRPOP, BLPOP, ...): the reply may
+// take up to block longer than the normal command timeout.
+func (c *Client) DoTimeout(block time.Duration, args ...string) (any, error) {
 	cn, err := c.get()
 	if err != nil {
 		return nil, err
 	}
-	reply, err := c.roundTrip(cn, args)
+	reply, err := c.roundTripTimeout(cn, args, c.cfg.Timeout+block)
 	var replyErr Error
 	if err != nil && !errors.As(err, &replyErr) {
 		// Network or protocol failure: the connection state is unknown.
@@ -140,7 +152,11 @@ func (c *Client) Do(args ...string) (any, error) {
 }
 
 func (c *Client) roundTrip(cn *conn, args []string) (any, error) {
-	_ = cn.nc.SetDeadline(time.Now().Add(c.cfg.Timeout))
+	return c.roundTripTimeout(cn, args, c.cfg.Timeout)
+}
+
+func (c *Client) roundTripTimeout(cn *conn, args []string, timeout time.Duration) (any, error) {
+	_ = cn.nc.SetDeadline(time.Now().Add(timeout))
 	fmt.Fprintf(cn.w, "*%d\r\n", len(args))
 	for _, a := range args {
 		fmt.Fprintf(cn.w, "$%d\r\n%s\r\n", len(a), a)

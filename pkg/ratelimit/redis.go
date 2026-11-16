@@ -1,17 +1,15 @@
 package ratelimit
 
 import (
-	"bufio"
 	"crypto/rand"
 	"fmt"
 	"io"
 	"math"
-	"net"
 	"os"
 	"strconv"
-	"strings"
-	"sync"
 	"time"
+
+	"github.com/golaravel/golaravel/pkg/redis"
 )
 
 // RedisConfig holds connection parameters for the Redis rate limit backend.
@@ -42,120 +40,11 @@ func DefaultRedisConfig() RedisConfig {
 	}
 }
 
-type redisConn struct {
-	conn   net.Conn
-	reader *bufio.Reader
-	writer *bufio.Writer
-}
-
-func dialRedis(cfg RedisConfig) (*redisConn, error) {
-	timeout := cfg.Timeout
-	if timeout <= 0 {
-		timeout = 3 * time.Second
-	}
-
-	c, err := net.DialTimeout("tcp", cfg.Addr, timeout)
-	if err != nil {
-		return nil, err
-	}
-
-	rc := &redisConn{
-		conn:   c,
-		reader: bufio.NewReader(c),
-		writer: bufio.NewWriter(c),
-	}
-
-	if cfg.Password != "" {
-		if _, err := rc.cmd("AUTH", cfg.Password); err != nil {
-			c.Close()
-			return nil, err
-		}
-	}
-
-	if cfg.DB != 0 {
-		if _, err := rc.cmd("SELECT", strconv.Itoa(cfg.DB)); err != nil {
-			c.Close()
-			return nil, err
-		}
-	}
-
-	return rc, nil
-}
-
-func (rc *redisConn) cmd(args ...string) (any, error) {
-	fmt.Fprintf(rc.writer, "*%d\r\n", len(args))
-	for _, arg := range args {
-		fmt.Fprintf(rc.writer, "$%d\r\n%s\r\n", len(arg), arg)
-	}
-	if err := rc.writer.Flush(); err != nil {
-		return nil, err
-	}
-	return rc.readReply()
-}
-
-func (rc *redisConn) readReply() (any, error) {
-	line, err := rc.reader.ReadString('\n')
-	if err != nil {
-		return nil, err
-	}
-	line = strings.TrimRight(line, "\r\n")
-	if len(line) == 0 {
-		return nil, io.EOF
-	}
-
-	switch line[0] {
-	case '+':
-		return line[1:], nil
-	case '-':
-		return nil, fmt.Errorf("redis: %s", line[1:])
-	case ':':
-		return strconv.ParseInt(line[1:], 10, 64)
-	case '$':
-		length, err := strconv.Atoi(line[1:])
-		if err != nil {
-			return nil, err
-		}
-		if length == -1 {
-			return nil, nil
-		}
-		buf := make([]byte, length+2)
-		if _, err := io.ReadFull(rc.reader, buf); err != nil {
-			return nil, err
-		}
-		return string(buf[:length]), nil
-	case '*':
-		count, err := strconv.Atoi(line[1:])
-		if err != nil {
-			return nil, err
-		}
-		if count == -1 {
-			return nil, nil
-		}
-		items := make([]any, count)
-		for i := 0; i < count; i++ {
-			item, err := rc.readReply()
-			if err != nil {
-				return nil, err
-			}
-			items[i] = item
-		}
-		return items, nil
-	default:
-		return nil, fmt.Errorf("redis: unknown reply type '%c'", line[0])
-	}
-}
-
-func (rc *redisConn) close() {
-	if rc.conn != nil {
-		_ = rc.conn.Close()
-	}
-}
-
-// RedisStore provides distributed sliding-window rate limiting backed by Redis sorted sets (ZSET).
+// RedisStore is a sliding-window rate limit store in Redis sorted sets,
+// shared by every instance using the same Redis.
 type RedisStore struct {
-	cfg   RedisConfig
-	mu    sync.Mutex
-	conns []*redisConn
+	cfg    RedisConfig
+	client *redis.Client
 }
 
 // NewRedisStore creates a new Redis rate limiting store.
@@ -163,230 +52,143 @@ func NewRedisStore(cfg RedisConfig) (*RedisStore, error) {
 	if cfg.Prefix == "" {
 		cfg.Prefix = "golaravel:ratelimit:"
 	}
-
-	// Verify connection
-	conn, err := dialRedis(cfg)
+	client, err := redis.New(redis.Config{Addr: cfg.Addr, Password: cfg.Password, DB: cfg.DB, Timeout: cfg.Timeout, PoolSize: 16})
 	if err != nil {
 		return nil, err
 	}
-	conn.close()
-
-	return &RedisStore{
-		cfg:   cfg,
-		conns: make([]*redisConn, 0, 8),
-	}, nil
+	return &RedisStore{cfg: cfg, client: client}, nil
 }
 
-func (s *RedisStore) acquireConn() (*redisConn, error) {
-	s.mu.Lock()
-	if len(s.conns) > 0 {
-		c := s.conns[len(s.conns)-1]
-		s.conns = s.conns[:len(s.conns)-1]
-		s.mu.Unlock()
-		return c, nil
+// Close releases the store's connections.
+func (s *RedisStore) Close() error { return s.client.Close() }
+
+// window trims attempts older than the window and returns the count and
+// the oldest remaining timestamp (ns, 0 when empty).
+func (s *RedisStore) window(redisKey string, nowNano, windowNano int64) (int64, int64, error) {
+	if _, err := s.client.Do("ZREMRANGEBYSCORE", redisKey, "-inf", strconv.FormatInt(nowNano-windowNano, 10)); err != nil {
+		return 0, 0, err
 	}
-	s.mu.Unlock()
-
-	return dialRedis(s.cfg)
-}
-
-func (s *RedisStore) releaseConn(c *redisConn, err error) {
+	count, err := redis.Int(s.client.Do("ZCARD", redisKey))
 	if err != nil {
-		c.close()
-		return
+		return 0, 0, err
 	}
-	s.mu.Lock()
-	if len(s.conns) < 16 {
-		s.conns = append(s.conns, c)
-		s.mu.Unlock()
-		return
-	}
-	s.mu.Unlock()
-	c.close()
-}
-
-// Hit records an attempt using Redis ZSET sliding-window algorithm.
-func (s *RedisStore) Hit(key string, maxAttempts int, window time.Duration) (Result, error) {
-	conn, err := s.acquireConn()
-	if err != nil {
-		return Result{}, err
-	}
-	defer func() { s.releaseConn(conn, err) }()
-
-	redisKey := s.cfg.Prefix + key
-	now := time.Now()
-	nowNano := now.UnixNano()
-	windowNano := window.Nanoseconds()
-	cutoffNano := nowNano - windowNano
-
-	// 1. Remove expired timestamps: ZREMRANGEBYSCORE key -inf cutoff
-	_, err = conn.cmd("ZREMRANGEBYSCORE", redisKey, "-inf", strconv.FormatInt(cutoffNano, 10))
-	if err != nil {
-		return Result{}, err
-	}
-
-	// 2. Count active elements in window: ZCARD key
-	cardReply, err := conn.cmd("ZCARD", redisKey)
-	if err != nil {
-		return Result{}, err
-	}
-	count, _ := cardReply.(int64)
-
-	// 3. Inspect oldest timestamp to compute reset and retryAfter
-	var oldestNano int64 = 0
-	oldestReply, err := conn.cmd("ZRANGE", redisKey, "0", "0", "WITHSCORES")
-	if err == nil {
-		if list, ok := oldestReply.([]any); ok && len(list) >= 2 {
-			if scoreStr, ok := list[1].(string); ok {
-				oldestNano, _ = strconv.ParseInt(scoreStr, 10, 64)
-			}
+	var oldest int64
+	if list, ok := mustList(s.client.Do("ZRANGE", redisKey, "0", "0", "WITHSCORES")); ok && len(list) >= 2 {
+		if score, ok := list[1].(string); ok {
+			f, _ := strconv.ParseFloat(score, 64)
+			oldest = int64(f)
 		}
 	}
+	return count, oldest, nil
+}
 
-	if count >= int64(maxAttempts) {
-		resetNano := oldestNano + windowNano
-		retryAfterNano := resetNano - nowNano
-		if retryAfterNano < 0 {
-			retryAfterNano = 0
-		}
-		return Result{
-			Allowed:    false,
-			Limit:      maxAttempts,
-			Remaining:  0,
-			ResetTime:  time.Unix(0, resetNano),
-			RetryAfter: time.Duration(retryAfterNano),
-		}, nil
-	}
-
-	// 4. Under limit: append attempt ZADD key nowNano nowNano:rand
-	member := fmt.Sprintf("%d:%s", nowNano, randomHex(4))
-	_, err = conn.cmd("ZADD", redisKey, strconv.FormatInt(nowNano, 10), member)
+func mustList(reply any, err error) ([]any, bool) {
 	if err != nil {
-		return Result{}, err
+		return nil, false
 	}
+	l, ok := reply.([]any)
+	return l, ok
+}
 
-	// 5. Update TTL: EXPIRE key ceil(window.Seconds)+1
-	expireSecs := int(math.Ceil(window.Seconds())) + 2
-	_, _ = conn.cmd("EXPIRE", redisKey, strconv.Itoa(expireSecs))
-
-	newCount := int(count + 1)
-	remaining := maxAttempts - newCount
-	if oldestNano == 0 {
-		oldestNano = nowNano
-	}
+func denied(maxAttempts int, oldestNano, windowNano, nowNano int64) Result {
 	resetNano := oldestNano + windowNano
+	retry := resetNano - nowNano
+	if retry < 0 {
+		retry = 0
+	}
+	return Result{Allowed: false, Limit: maxAttempts, Remaining: 0, ResetTime: time.Unix(0, resetNano), RetryAfter: time.Duration(retry)}
+}
 
+// hitScript trims the window, counts, and adds the attempt only when under
+// the limit, atomically: concurrent requests on several instances can never
+// be admitted past maxAttempts. KEYS[1] = key; ARGV = cutoff, now, max,
+// member, expire seconds. Returns {allowed, count, oldest score}.
+const hitScript = `
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
+local count = redis.call('ZCARD', KEYS[1])
+local first = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
+local oldest = first[2] or ''
+if count >= tonumber(ARGV[3]) then
+  return {0, count, oldest}
+end
+redis.call('ZADD', KEYS[1], ARGV[2], ARGV[4])
+redis.call('EXPIRE', KEYS[1], ARGV[5])
+return {1, count + 1, oldest}
+`
+
+// Hit records an attempt using a Redis ZSET sliding window, atomically
+// (one Lua script), so a burst of concurrent requests never gets past the
+// limit.
+func (s *RedisStore) Hit(key string, maxAttempts int, window time.Duration) (Result, error) {
+	redisKey := s.cfg.Prefix + key
+	nowNano := time.Now().UnixNano()
+	windowNano := window.Nanoseconds()
+	expireSecs := int(math.Ceil(window.Seconds())) + 2
+	member := fmt.Sprintf("%d:%s", nowNano, randomHex(8))
+
+	reply, err := s.client.Do("EVAL", hitScript, "1", redisKey,
+		strconv.FormatInt(nowNano-windowNano, 10), strconv.FormatInt(nowNano, 10),
+		strconv.Itoa(maxAttempts), member, strconv.Itoa(expireSecs))
+	if err != nil {
+		return Result{}, err
+	}
+	parts, ok := reply.([]any)
+	if !ok || len(parts) != 3 {
+		return Result{}, fmt.Errorf("ratelimit: unexpected script reply %v", reply)
+	}
+	allowed, _ := redis.Int(parts[0], nil)
+	count, _ := redis.Int(parts[1], nil)
+	var oldest int64
+	if str, ok := parts[2].(string); ok && str != "" {
+		f, _ := strconv.ParseFloat(str, 64)
+		oldest = int64(f)
+	}
+	if oldest == 0 {
+		oldest = nowNano
+	}
+	if allowed != 1 {
+		return denied(maxAttempts, oldest, windowNano, nowNano), nil
+	}
 	return Result{
-		Allowed:    true,
-		Limit:      maxAttempts,
-		Remaining:  remaining,
-		ResetTime:  time.Unix(0, resetNano),
-		RetryAfter: 0,
+		Allowed:   true,
+		Limit:     maxAttempts,
+		Remaining: maxAttempts - int(count),
+		ResetTime: time.Unix(0, oldest+windowNano),
 	}, nil
 }
 
 // Status inspects the current rate limit without appending a new attempt.
 func (s *RedisStore) Status(key string, maxAttempts int, window time.Duration) (Result, error) {
-	conn, err := s.acquireConn()
-	if err != nil {
-		return Result{}, err
-	}
-	defer func() { s.releaseConn(conn, err) }()
-
 	redisKey := s.cfg.Prefix + key
-	now := time.Now()
-	nowNano := now.UnixNano()
+	nowNano := time.Now().UnixNano()
 	windowNano := window.Nanoseconds()
-	cutoffNano := nowNano - windowNano
-
-	// Remove expired
-	_, err = conn.cmd("ZREMRANGEBYSCORE", redisKey, "-inf", strconv.FormatInt(cutoffNano, 10))
+	count, oldest, err := s.window(redisKey, nowNano, windowNano)
 	if err != nil {
 		return Result{}, err
 	}
-
-	// Count
-	cardReply, err := conn.cmd("ZCARD", redisKey)
-	if err != nil {
-		return Result{}, err
-	}
-	count, _ := cardReply.(int64)
-
-	var oldestNano int64 = 0
-	oldestReply, err := conn.cmd("ZRANGE", redisKey, "0", "0", "WITHSCORES")
-	if err == nil {
-		if list, ok := oldestReply.([]any); ok && len(list) >= 2 {
-			if scoreStr, ok := list[1].(string); ok {
-				oldestNano, _ = strconv.ParseInt(scoreStr, 10, 64)
-			}
-		}
-	}
-
 	if count >= int64(maxAttempts) {
-		resetNano := oldestNano + windowNano
-		retryAfterNano := resetNano - nowNano
-		if retryAfterNano < 0 {
-			retryAfterNano = 0
-		}
-		return Result{
-			Allowed:    false,
-			Limit:      maxAttempts,
-			Remaining:  0,
-			ResetTime:  time.Unix(0, resetNano),
-			RetryAfter: time.Duration(retryAfterNano),
-		}, nil
+		return denied(maxAttempts, oldest, windowNano, nowNano), nil
 	}
-
-	remaining := maxAttempts - int(count)
 	resetNano := nowNano + windowNano
-	if oldestNano > 0 {
-		resetNano = oldestNano + windowNano
+	if oldest > 0 {
+		resetNano = oldest + windowNano
 	}
-
-	return Result{
-		Allowed:    true,
-		Limit:      maxAttempts,
-		Remaining:  remaining,
-		ResetTime:  time.Unix(0, resetNano),
-		RetryAfter: 0,
-	}, nil
+	return Result{Allowed: true, Limit: maxAttempts, Remaining: maxAttempts - int(count), ResetTime: time.Unix(0, resetNano)}, nil
 }
 
 // Reset clears the Redis key.
 func (s *RedisStore) Reset(key string) error {
-	conn, err := s.acquireConn()
-	if err != nil {
-		return err
-	}
-	defer func() { s.releaseConn(conn, err) }()
-
-	_, err = conn.cmd("DEL", s.cfg.Prefix+key)
+	_, err := s.client.Do("DEL", s.cfg.Prefix+key)
 	return err
 }
 
-// Clear removes all keys matching the prefix.
+// Clear removes all keys under the prefix (SCAN, not KEYS, so a large
+// Redis is not blocked).
 func (s *RedisStore) Clear() error {
-	conn, err := s.acquireConn()
-	if err != nil {
+	return s.client.Scan(s.cfg.Prefix+"*", func(keys []string) error {
+		_, err := s.client.Do(append([]string{"DEL"}, keys...)...)
 		return err
-	}
-	defer func() { s.releaseConn(conn, err) }()
-
-	keysReply, err := conn.cmd("KEYS", s.cfg.Prefix+"*")
-	if err != nil {
-		return err
-	}
-	if keys, ok := keysReply.([]any); ok && len(keys) > 0 {
-		args := []string{"DEL"}
-		for _, k := range keys {
-			if kStr, ok := k.(string); ok {
-				args = append(args, kStr)
-			}
-		}
-		_, err = conn.cmd(args...)
-		return err
-	}
-	return nil
+	})
 }
 
 func randomHex(bytesLen int) string {

@@ -457,7 +457,7 @@ func startMockRedisServer(t *testing.T) (string, func()) {
 					mu.Lock()
 
 					switch cmd {
-					case "AUTH":
+					case "AUTH", "PING":
 						writer.WriteString("+OK\r\n")
 
 					case "LPUSH":
@@ -806,4 +806,29 @@ func TestWorkerDashboardRequiresAuthorize(t *testing.T) {
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("cross-site flush: %d", w.Code)
 	}
+}
+
+func TestRedisDriver_DelayedJobOnCustomQueue(t *testing.T) {
+	addr, cleanup := startMockRedisServer(t)
+	defer cleanup()
+	driver, err := NewRedisDriver(RedisConfig{Addr: addr, Prefix: "test:queue:"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer driver.Close()
+
+	if err := driver.Later("emails", 50*time.Millisecond, &JobPayload{ID: "mail-1", Type: "T"}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if job, err := driver.Pop("emails", 0); err == nil && job != nil {
+			if job.ID != "mail-1" {
+				t.Fatalf("unexpected job %+v", job)
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("a delayed job on a non-standard queue was never moved to its ready queue")
 }
