@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.6.0] - 2026-11-16
 
 ### Security
 - **Sessions (`pkg/session`)**: `DefaultConfig` shipped a hard-coded `SecretKey`, so anyone could forge cookie-driver sessions (for example, signing in as any user). With no key, or with that old key, a random key is generated per process and a warning is logged. Set `Config.SecretKey` in production.
