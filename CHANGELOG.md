@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Security
+- **Sessions (`pkg/session`)**: `DefaultConfig` shipped a hard-coded `SecretKey`, so anyone could forge cookie-driver sessions (for example, signing in as any user). With no key, or with that old key, a random key is generated per process and a warning is logged. Set `Config.SecretKey` in production.
+- **Sessions**: passing any `Config` turned `HttpOnly` and cookie encryption off, because unset bools are `false`. Both are now always on.
+- **Session file driver**: the session id from the cookie was joined into a file path with only `filepath.Clean`, so `../` escaped the session directory. Ids must now be plain tokens.
+- **CORS (`middleware.CORS`)**: any `Origin` was reflected whenever `AllowedOrigins` was not exactly `["*"]`, with credentials when `AllowCredentials` was set. Only listed origins (or ones `AllowOriginFunc` accepts) are reflected now. `"*"` never sends credentials, and `Vary: Origin` is always set.
+- **Recovery**: the panic value (which can hold SQL, file paths or secrets) was sent to the client. It is now only logged.
+- **Request bodies**: nothing capped them, so one large body could exhaust memory. `Engine` limits bodies to 32 MiB by default (`Engine.MaxBodyBytes(n)`; `n <= 0` removes the limit). `Run` caps request headers at 1 MiB.
+- **Queue dashboard**: `MountDashboard` exposed job payloads and retry, delete and flush actions to anyone. The new `MountDashboardWith(r, DashboardOptions{Prefix, Authorize})` checks `Authorize` on every route, and the routes that change state refuse cross-site browser requests.
+- **JWT (`pkg/auth`)**: an empty secret signed tokens with an empty HMAC key. `GenerateToken` / `VerifyToken` now return `ErrEmptySecret`. Tokens whose header is not `HS256` are rejected. The example app no longer falls back to a hard-coded JWT secret.
+- **CSRF**: tokens are compared in constant time, and the cookie is `Secure` behind an HTTPS proxy.
+- **`middleware.RateLimiter`**: buckets were keyed by the raw connection address, so every client behind a proxy shared one, and old buckets were never removed. It now uses `ClientIP()` and forgets idle clients.
+- **`SecureHeaders`**: sends `X-XSS-Protection: 0` (current OWASP advice) and HSTS on HTTPS requests.
+
+### Added
+- `JWTManager.RevokedUsing(fn)` / `ErrTokenRevoked` to reject tokens after logout or a password change.
+- `CORSOptions.AllowOriginFunc`; `session.Config.AllowScriptAccess` / `DisableEncryption`; `queue.DashboardOptions`; facade `Queue.MountDashboardWith`.
+
+### Breaking
+- `session.Config{HttpOnly: false}` / `Encrypt: false` no longer turn those off; use `AllowScriptAccess` / `DisableEncryption`.
+- Apps that relied on the built-in session `SecretKey` get a random key per process, so sessions end on restart until a key is configured.
+- `middleware.CORS` with a list of origins no longer allows unlisted origins.
+- `queue.MountDashboard` (no `Authorize`) answers 403 on every route; switch to `MountDashboardWith`. If the routes already sit behind your own auth middleware, pass `Authorize: func(*context.Context) bool { return true }`.
+- Request bodies over 32 MiB fail to read unless `Engine.MaxBodyBytes` is raised.
+- `NewJWTManager("")` can no longer issue or verify tokens.
+
 ## [v1.5.0] - 2026-11-16
 
 ### Security
