@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Container singletons (`pkg/container`)**: double-checked locking read `instance` without synchronization (a data race the new `-race` CI run found), and a singleton whose value was nil was rebuilt on every resolve. An atomic ready flag fixes both.
+- **SQL cache `Increment` on Postgres** (found by the new integration run): two concurrent first increments of a new key could both read 0, losing an update, because `SELECT ... FOR UPDATE` locks nothing when the row is missing. The row is now inserted before it is locked, and increments retry on deadlocks and serialization failures.
 - **SQL cache locks on MySQL**: re-acquiring a lock without expiry by its own owner returned false, because MySQL counts an UPDATE that changes nothing as 0 affected rows. The owner is now checked directly.
 
 ## [v1.9.0] - 2026-11-16
