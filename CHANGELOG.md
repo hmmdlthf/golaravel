@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **JWT with public/private keys (`pkg/auth`)**: `NewJWTManagerWithKey(privateKey, kid, ttl)` signs RS256 (RSA ≥ 2048), ES256 (P-256) or EdDSA (Ed25519) tokens, so other services verify them with only the public key.
+  - **Verifying elsewhere:** `NewJWTVerifier(publicKey, kid)` and `NewJWTVerifierFromJWKS(json)` create verify-only managers, and `JWKS()` publishes the public keys.
+  - **Rotation:** `AcceptKey(publicKey, kid)` keeps accepting old keys; tokens carry `kid` and are checked only against that key.
+  - **Key files:** `ParsePrivateKeyPEM` and `ParsePublicKeyPEM` read PEM keys.
+  - **Algorithm checks:** the algorithm always comes from the manager, never from the token. Key-based managers refuse HS256 (no confusion with a public key used as an HMAC secret), and secret managers refuse key-signed tokens.
+  - **Interoperability:** the ES256 format is checked against the example in RFC 7515, appendix A.3.
+
 ## [v1.10.0] - 2026-11-16
 
 ### Added
