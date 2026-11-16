@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.12.0] - 2026-11-16
 
 ### Added
 - **Request body read timeout**: `Engine.BodyReadTimeout` (default 2 minutes) and `middleware.BodyReadTimeout(d)` per route. Upgrade requests and requests without a body are not affected, and the deadline is cleared once the body has been read, so slow handlers and SSE streams keep working.
