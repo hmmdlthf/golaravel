@@ -151,13 +151,14 @@ Outside HTTP, use `validation.Make(data, rules)` with `.Fails()`, `.Errors()`, `
 
 | Group | Rules |
 |---|---|
+| Exclusion | `exclude`, `exclude_if:f,v…`, `exclude_unless:f,v…`, `exclude_with:f`, `exclude_without:f` (the field is skipped and left out of `Validated()`) |
 | Presence | `required`, `required_if:f,v…`, `required_unless:f,v…`, `required_with:f…`, `required_with_all`, `required_without`, `required_without_all`, `filled`, `present`, `sometimes`, `nullable`, `prohibited`, `prohibited_if`, `prohibited_unless`, `accepted`, `declined`, `bail` |
-| Types | `string`, `integer`, `numeric`, `decimal:min[,max]`, `boolean`, `array[:keys]`, `list`, `json` |
+| Types | `string`, `integer`, `numeric`, `decimal:min[,max]`, `boolean`, `array[:keys]`, `required_array_keys:k…`, `list`, `json` |
 | Formats | `email`, `url[:schemes]`, `uuid`, `ulid`, `ip`, `ipv4`, `ipv6`, `alpha`, `alpha_num`, `alpha_dash`, `lowercase`, `uppercase`, `regex:pattern`, `not_regex:pattern`, `starts_with`, `ends_with`, `doesnt_start_with`, `doesnt_end_with`, `timezone` |
 | Size | `min`, `max`, `size`, `between`, `gt`, `gte`, `lt`, `lte` (a number or another field), `digits`, `digits_between`, `multiple_of` |
 | Comparison | `confirmed`, `same:f`, `different:f`, `in:a,b`, `not_in:a,b`, `distinct` |
 | Dates | `date`, `date_format:<Go layout>`, `before`, `after`, `before_or_equal`, `after_or_equal`, `date_equals` (a date, `today`/`tomorrow`/`yesterday`/`now`, or another field) |
-| Files | `file`, `image`, `mimes:png,jpg`, `mimetypes:image/*`, `extensions:pdf` |
+| Files | `file`, `image`, `mimes:png,jpg`, `mimetypes:image/*`, `extensions:pdf`, `dimensions:min_width=100,max_height=800,ratio=3/2` (PNG, JPEG, GIF) |
 | Database | `unique:table[,column[,ignoreID[,idColumn]]]`, `exists:table[,column]` |
 
 Things to know:
@@ -178,3 +179,14 @@ Things to know:
 - **Translations:** messages are looked up as `validation.<rule>` (`validation.min.string` for size
   rules) in your `lang/<locale>/validation.json`, falling back to English.
 - **Custom rules:** implement `validation.Rule`, or use `validation.RuleFunc(message, fn)`.
+
+### Password strength
+
+```go
+"password": []any{"required", "confirmed",
+	validation.Password().Min(12).MixedCase().Numbers().Symbols().NotIn(commonPasswords...)},
+```
+
+Every unmet requirement gets its own message ("must contain at least one number", ...). Other
+options: `Letters()` and `Max(n)`. Custom rules can report several messages in the same way by
+implementing `validation.MultiRule`.
