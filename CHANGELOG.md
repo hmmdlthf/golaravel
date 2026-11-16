@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.9.0] - 2026-11-16
 
 ### Added
 - **Validation rule engine (`pkg/validation`)**: `validation.Make(data, validation.Rules{...})` with Laravel-style rule strings.
