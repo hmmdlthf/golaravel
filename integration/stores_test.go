@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -187,6 +188,52 @@ func exerciseCache(t *testing.T, a, b cache.Store) {
 	}
 	if _, ok := a.Get("rem"); ok {
 		t.Fatal("pull did not delete")
+	}
+
+	// Stampede protection: one computation for concurrent misses on both
+	// instances.
+	var computed int32
+	var swg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		swg.Add(1)
+		st := a
+		if i%2 == 1 {
+			st = b
+		}
+		go func() {
+			defer swg.Done()
+			_, _ = st.Remember("hot", time.Minute, func() (any, error) {
+				atomic.AddInt32(&computed, 1)
+				time.Sleep(150 * time.Millisecond)
+				return "fresh", nil
+			})
+		}()
+	}
+	swg.Wait()
+	if computed != 1 {
+		t.Fatalf("Remember computed %d times for 20 concurrent callers, want 1", computed)
+	}
+
+	// Atomic Pull: exactly one of many concurrent pullers gets the value.
+	_ = a.Put("ticket", "once", 0)
+	var pulled int32
+	var pwg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		pwg.Add(1)
+		st := a
+		if i%2 == 1 {
+			st = b
+		}
+		go func() {
+			defer pwg.Done()
+			if st.Pull("ticket") != nil {
+				atomic.AddInt32(&pulled, 1)
+			}
+		}()
+	}
+	pwg.Wait()
+	if pulled != 1 {
+		t.Fatalf("%d callers pulled the value, want exactly 1", pulled)
 	}
 
 	_ = a.Tags("users").Put("u1", "alice", 0)

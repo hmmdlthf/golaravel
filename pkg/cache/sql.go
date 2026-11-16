@@ -258,3 +258,40 @@ func (b *SQLBackend) Release(name, owner string) error {
 	}
 	return nil
 }
+
+// PullRaw reads and deletes a key in one transaction, so when several
+// instances pull the same key only one gets the value.
+func (b *SQLBackend) PullRaw(key string) ([]byte, bool, error) {
+	ctx, cancel := b.ctx()
+	defer cancel()
+	tx, err := b.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	defer tx.Rollback()
+	var val []byte
+	var exp int64
+	err = tx.QueryRowContext(ctx, b.d.Rebind(fmt.Sprintf("SELECT value, expires_at FROM %s WHERE cache_key = ?%s", b.table, b.d.ForUpdate())), key).Scan(&val, &exp)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	res, err := tx.ExecContext(ctx, b.d.Rebind(fmt.Sprintf("DELETE FROM %s WHERE cache_key = ?", b.table)), key)
+	if err != nil {
+		return nil, false, err
+	}
+	// The delete decides who wins: a concurrent puller that read the same
+	// row before it was locked finds nothing left to delete.
+	if n, _ := res.RowsAffected(); n != 1 {
+		return nil, false, nil
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, false, err
+	}
+	if !live(exp) {
+		return nil, false, nil
+	}
+	return val, true, nil
+}

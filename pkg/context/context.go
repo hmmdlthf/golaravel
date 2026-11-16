@@ -105,7 +105,7 @@ type Context struct {
 
 	// Middleware execution pipeline
 	handlers []HandlerFunc
-	index    int8
+	index    int
 
 	// Scoped container for request-level DI
 	Container *container.Container
@@ -160,7 +160,7 @@ func (c *Context) SetHandlers(handlers []HandlerFunc) {
 // Next executes the next handler or middleware in the pipeline.
 func (c *Context) Next() error {
 	c.index++
-	for c.index < int8(len(c.handlers)) {
+	for c.index < len(c.handlers) {
 		if err := c.handlers[c.index](c); err != nil {
 			return err
 		}
@@ -171,7 +171,7 @@ func (c *Context) Next() error {
 
 // Abort prevents pending handlers in the chain from being called.
 func (c *Context) Abort() {
-	c.index = int8(len(c.handlers))
+	c.index = len(c.handlers)
 }
 
 // AbortWithStatus aborts the pipeline and writes the specified HTTP status code.
@@ -188,7 +188,7 @@ func (c *Context) AbortWithError(code int, err error) error {
 
 // IsAborted returns true if the current request has been aborted.
 func (c *Context) IsAborted() bool {
-	return c.index >= int8(len(c.handlers))
+	return c.index >= len(c.handlers)
 }
 
 // Context returns the standard Go request context.

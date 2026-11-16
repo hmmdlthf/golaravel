@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -186,5 +188,66 @@ func TestSQLStorePrune(t *testing.T) {
 	}
 	if _, _, err := NewSQLStore(db, database.SQLite, SQLOptions{Table: "cache; --"}); err == nil {
 		t.Fatal("unsafe table name accepted")
+	}
+}
+
+func stampede(t *testing.T, name string, a, b Store) {
+	t.Helper()
+	var calls int32
+	var wg sync.WaitGroup
+	results := make([]any, 20)
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		s := a
+		if i%2 == 1 {
+			s = b
+		}
+		go func(i int) {
+			defer wg.Done()
+			results[i], _ = s.Remember("hot", time.Minute, func() (any, error) {
+				atomic.AddInt32(&calls, 1)
+				time.Sleep(100 * time.Millisecond)
+				return "fresh", nil
+			})
+		}(i)
+	}
+	wg.Wait()
+	if calls != 1 {
+		t.Errorf("%s: Remember computed %d times for 20 concurrent callers, want 1", name, calls)
+	}
+	for i, r := range results {
+		if r != "fresh" {
+			t.Errorf("%s: caller %d got %v", name, i, r)
+		}
+	}
+}
+
+func TestRememberStampedeProtection(t *testing.T) {
+	m := NewMemoryStore()
+	stampede(t, "memory", m, m)
+	for name, pair := range sharedStores(t) {
+		stampede(t, name, pair[0], pair[1])
+	}
+}
+
+func TestPullIsAtomicAcrossInstances(t *testing.T) {
+	for name, pair := range sharedStores(t) {
+		_ = pair[0].Put("ticket", "only-once", 0)
+		var got int32
+		var wg sync.WaitGroup
+		for i := 0; i < 20; i++ {
+			wg.Add(1)
+			s := pair[i%2]
+			go func() {
+				defer wg.Done()
+				if s.Pull("ticket") != nil {
+					atomic.AddInt32(&got, 1)
+				}
+			}()
+		}
+		wg.Wait()
+		if got != 1 {
+			t.Errorf("%s: %d callers pulled the value, want exactly 1", name, got)
+		}
 	}
 }

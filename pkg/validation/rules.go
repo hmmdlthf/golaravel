@@ -32,6 +32,13 @@ type Rule interface {
 	Message() string
 }
 
+// MultiRule is a Rule that can report several problems at once (see
+// Password). The engine uses Failures instead of Passes / Message.
+type MultiRule interface {
+	Rule
+	Failures(ctx context.Context, attribute string, value any, data map[string]any) []string
+}
+
 // RuleFunc adapts a function into a Rule.
 func RuleFunc(message string, fn func(value any) bool) Rule { return ruleFunc{msg: message, fn: fn} }
 
@@ -390,16 +397,33 @@ func (v *RulesValidator) validateField(path string, rules []parsedRule) {
 	if hasRule(rules, "sometimes") && !present {
 		return
 	}
+	if v.excluded(rules) {
+		// exclude* rules drop the field from validation and Validated().
+		return
+	}
 	empty := isEmpty(val, present)
 	numeric := hasRule(rules, "numeric", "integer", "decimal")
 	bail := hasRule(rules, "bail")
 	failed := false
 	for _, r := range rules {
 		switch r.name {
-		case "bail", "sometimes", "nullable":
+		case "bail", "sometimes", "nullable", "exclude", "exclude_if", "exclude_unless", "exclude_with", "exclude_without":
 			continue
 		}
 		if empty && !implicitRules[r.name] {
+			continue
+		}
+		if mr, isMulti := r.custom.(MultiRule); r.name == "custom" && isMulti {
+			msgs := mr.Failures(v.ctx, path, val, v.data)
+			for _, m := range msgs {
+				v.add(path, interpolate(m, map[string]any{"attribute": v.attr(path)}))
+			}
+			if len(msgs) > 0 {
+				failed = true
+				if bail {
+					break
+				}
+			}
 			continue
 		}
 		ok, msgParams := v.check(path, val, present, r, numeric)
@@ -415,6 +439,53 @@ func (v *RulesValidator) validateField(path string, rules []parsedRule) {
 	if !failed && present {
 		set(v.validated, path, val)
 	}
+}
+
+// excluded evaluates exclude, exclude_if, exclude_unless, exclude_with and
+// exclude_without.
+func (v *RulesValidator) excluded(rules []parsedRule) bool {
+	for _, r := range rules {
+		other := func(i int) (any, bool) {
+			if i < len(r.params) {
+				return get(v.data, strings.TrimSpace(r.params[i]))
+			}
+			return nil, false
+		}
+		matches := func() bool {
+			o, _ := other(0)
+			s := fmt.Sprint(o)
+			if b, ok := o.(bool); ok {
+				s = strconv.FormatBool(b)
+			}
+			for _, x := range r.params[1:] {
+				if s == strings.TrimSpace(x) {
+					return true
+				}
+			}
+			return false
+		}
+		switch r.name {
+		case "exclude":
+			return true
+		case "exclude_if":
+			if len(r.params) > 1 && matches() {
+				return true
+			}
+		case "exclude_unless":
+			if len(r.params) > 1 && !matches() {
+				return true
+			}
+		case "exclude_with":
+			if o, ok := other(0); !isEmpty(o, ok) {
+				return true
+			}
+		case "exclude_without":
+			if o, ok := other(0); isEmpty(o, ok) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (v *RulesValidator) add(field, msg string) {
@@ -551,6 +622,17 @@ func (v *RulesValidator) check(path string, val any, present bool, r parsedRule,
 		return true, nil
 	case "list":
 		return isList(val), nil
+	case "required_array_keys":
+		m, ok := val.(map[string]any)
+		if !ok {
+			return false, map[string]any{"values": strings.Join(p, ", ")}
+		}
+		for _, k := range p {
+			if _, has := m[strings.TrimSpace(k)]; !has {
+				return false, map[string]any{"values": strings.Join(p, ", ")}
+			}
+		}
+		return true, nil
 	case "json":
 		s, ok := val.(string)
 		return ok && json.Valid([]byte(s)), nil
@@ -771,6 +853,17 @@ func (v *RulesValidator) check(path string, val any, present bool, r parsedRule,
 	// --- files
 	case "file":
 		return len(files(val)) > 0, nil
+	case "dimensions":
+		fs := files(val)
+		if len(fs) == 0 {
+			return false, nil
+		}
+		for _, f := range fs {
+			if !dimensionsMatch(f, p) {
+				return false, nil
+			}
+		}
+		return true, nil
 	case "image", "mimes", "mimetypes", "extensions":
 		fs := files(val)
 		if len(fs) == 0 {
@@ -1058,6 +1151,8 @@ var defaultMessages = map[string]string{
 	"boolean":              "The :attribute field must be true or false.",
 	"array":                "The :attribute field must be an array.",
 	"list":                 "The :attribute field must be a list.",
+	"required_array_keys":  "The :attribute field must contain entries for: :values.",
+	"dimensions":           "The :attribute field has invalid image dimensions.",
 	"json":                 "The :attribute field must be a valid JSON string.",
 	"email":                "The :attribute field must be a valid email address.",
 	"url":                  "The :attribute field must be a valid URL.",

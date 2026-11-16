@@ -1,6 +1,6 @@
 // Package redistest runs a tiny in-process Redis stand-in for tests. It
 // understands the commands GoLaravel's Redis stores use: PING, AUTH,
-// SELECT, GET, SET (NX / XX / PX / EX), DEL, INCRBY, PEXPIRE, SCAN (MATCH
+// SELECT, GET, GETDEL, SET (NX / XX / PX / EX), DEL, INCRBY, PEXPIRE, SCAN (MATCH
 // with a trailing *) and the compare-and-delete EVAL used to release locks.
 // It is not a Redis implementation.
 package redistest
@@ -163,6 +163,13 @@ func (s *Server) exec(w *bufio.Writer, args []string) {
 		}
 		s.data[k] = entry{val: v, exp: exp}
 		w.WriteString("+OK\r\n")
+	case "GETDEL":
+		if e, ok := s.lookup(args[1]); ok {
+			delete(s.data, args[1])
+			bulk(w, e.val)
+		} else {
+			w.WriteString("$-1\r\n")
+		}
 	case "DEL":
 		n := 0
 		for _, k := range args[1:] {

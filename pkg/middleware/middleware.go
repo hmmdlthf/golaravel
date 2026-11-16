@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -220,4 +221,41 @@ func SecureHeaders(opts ...SecureHeadersOptions) context.HandlerFunc {
 // ratelimit.SetStore(redis store) the limit is shared by every instance.
 func RateLimiter(requestsPerMinute int) context.HandlerFunc {
 	return ratelimit.ThrottleMax(requestsPerMinute, time.Minute)
+}
+
+// BodyReadTimeout changes the request body read deadline for the routes it
+// is attached to, for example a longer one for large uploads:
+//
+//	r.POST("/videos", middleware.BodyReadTimeout(30*time.Minute), upload)
+//
+// The deadline counts from when this middleware runs. d <= 0 removes it.
+func BodyReadTimeout(d time.Duration) context.HandlerFunc {
+	return func(c *context.Context) error {
+		ctl := http.NewResponseController(c.Response.ResponseWriter)
+		deadline := time.Time{}
+		if d > 0 {
+			deadline = time.Now().Add(d)
+		}
+		if ctl.SetReadDeadline(deadline) == nil && d > 0 && c.Request.Body != nil && c.Request.Body != http.NoBody {
+			c.Request.Body = &clearOnEOF{ReadCloser: c.Request.Body, ctl: ctl}
+		}
+		return c.Next()
+	}
+}
+
+// clearOnEOF removes the read deadline once the body is consumed (see
+// golaravel's engine for why it must not fire during the handler).
+type clearOnEOF struct {
+	io.ReadCloser
+	ctl  *http.ResponseController
+	done bool
+}
+
+func (b *clearOnEOF) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if err == io.EOF && !b.done {
+		b.done = true
+		_ = b.ctl.SetReadDeadline(time.Time{})
+	}
+	return n, err
 }

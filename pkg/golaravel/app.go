@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -34,6 +35,23 @@ type Engine struct {
 	providers   []ServiceProvider
 	middlewares []gcontext.HandlerFunc
 	maxBody     int64
+	bodyTimeout time.Duration
+}
+
+// DefaultBodyReadTimeout limits how long reading a request body may take
+// unless BodyReadTimeout changes it, so a client trickling a body cannot
+// hold a connection (and its goroutine) forever.
+const DefaultBodyReadTimeout = 2 * time.Minute
+
+// BodyReadTimeout sets how long the client has to send a request body,
+// counted from when the handler chain starts. Upgrade requests
+// (WebSockets) and requests without a body are not affected, and the
+// deadline is cleared once the body has been read, so slow handlers and
+// SSE streams keep working. d <= 0 removes it. Use
+// middleware.BodyReadTimeout to change it for one route (large uploads).
+func (app *Engine) BodyReadTimeout(d time.Duration) *Engine {
+	app.bodyTimeout = d
+	return app
 }
 
 // DefaultMaxBodyBytes caps request bodies unless MaxBodyBytes changes it.
@@ -51,9 +69,10 @@ func (app *Engine) MaxBodyBytes(n int64) *Engine {
 // New creates a bare GoLaravel application without default middlewares.
 func New() *Engine {
 	app := &Engine{
-		Router:    router.New(),
-		Container: container.New(),
-		maxBody:   DefaultMaxBodyBytes,
+		Router:      router.New(),
+		Container:   container.New(),
+		maxBody:     DefaultMaxBodyBytes,
+		bodyTimeout: DefaultBodyReadTimeout,
 	}
 
 	app.pool.New = func() any {
@@ -96,6 +115,12 @@ func (app *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Acquire pooled Context
 	if app.maxBody > 0 && r.Body != nil && r.Body != http.NoBody {
 		r.Body = http.MaxBytesReader(w, r.Body, app.maxBody)
+	}
+	if app.bodyTimeout > 0 && r.Body != nil && r.Body != http.NoBody && r.ContentLength != 0 && r.Header.Get("Upgrade") == "" {
+		ctl := http.NewResponseController(w)
+		if ctl.SetReadDeadline(time.Now().Add(app.bodyTimeout)) == nil {
+			r.Body = &deadlineBody{ReadCloser: r.Body, ctl: ctl}
+		}
 	}
 	c := app.pool.Get().(*gcontext.Context)
 	c.Reset(w, r)
@@ -161,4 +186,25 @@ func (app *Engine) Run(addr string) error {
 		slog.Info("GoLaravel server gracefully stopped")
 		return nil
 	}
+}
+
+// deadlineBody clears the body read deadline once the body has been read
+// to the end, so it never fires during a long handler (net/http keeps
+// reading the connection after the body to notice clients that go away,
+// and a timeout there would cancel the request context). On a timeout the
+// deadline stays, so net/http's attempt to drain the rest of the body also
+// fails fast and the connection is closed.
+type deadlineBody struct {
+	io.ReadCloser
+	ctl  *http.ResponseController
+	done bool
+}
+
+func (b *deadlineBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if err == io.EOF && !b.done {
+		b.done = true
+		_ = b.ctl.SetReadDeadline(time.Time{})
+	}
+	return n, err
 }

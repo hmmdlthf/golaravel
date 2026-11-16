@@ -12,6 +12,7 @@ type MemoryStore struct {
 	items        map[string]*Item
 	tagManager   *TagManager
 	lockProvider *MemoryLockProvider
+	flights      flightGroup
 }
 
 // NewMemoryStore creates a new memory-backed cache store.
@@ -174,18 +175,24 @@ func (s *MemoryStore) Flush() error {
 }
 
 // Remember retrieves an item, or computes and caches it if missing.
+//
+// Concurrent callers that miss the same key wait for one computation
+// instead of all running fn (cache stampede protection).
 func (s *MemoryStore) Remember(key string, ttl time.Duration, fn func() (any, error)) (any, error) {
 	if val, ok := s.Get(key); ok {
 		return val, nil
 	}
-
-	val, err := fn()
-	if err != nil {
-		return nil, err
-	}
-
-	_ = s.Put(key, val, ttl)
-	return val, nil
+	return s.flights.do(key, func() (any, error) {
+		if val, ok := s.Get(key); ok {
+			return val, nil
+		}
+		val, err := fn()
+		if err != nil {
+			return nil, err
+		}
+		_ = s.Put(key, val, ttl)
+		return val, nil
+	})
 }
 
 // RememberForever stores an item indefinitely.

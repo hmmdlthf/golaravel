@@ -113,3 +113,20 @@ func TestContext_BindJSON_And_JSON(t *testing.T) {
 		t.Fatalf("unexpected response body: %s", w.Body.String())
 	}
 }
+
+func TestHandlerChainLongerThan127(t *testing.T) {
+	c := context.NewContext()
+	c.Reset(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
+	calls := 0
+	handlers := make([]context.HandlerFunc, 300)
+	for i := range handlers {
+		handlers[i] = func(*context.Context) error { calls++; return nil }
+	}
+	c.SetHandlers(handlers)
+	if err := c.Next(); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 300 || !c.IsAborted() {
+		t.Fatalf("ran %d of 300 handlers", calls)
+	}
+}
