@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **Form method spoofing didn't work.** `view.Method("PUT")` emitted a `_method` field, but nothing read it, so HTML forms could never reach PUT, PATCH or DELETE routes. The engine now routes a POST with `_method` (or an `X-HTTP-Method-Override` header) of PUT, PATCH or DELETE as that method, before routing. GET is never overridden. Turn it off with `Engine.MethodOverride(false)`.
+- **`.env` parsing (`pkg/config`)**:
+  - `export KEY=value` lines are read.
+  - Unquoted values drop a trailing ` # comment`.
+  - Double-quoted values support `\n`, `\"` and `\\`, and their closing quote skips escaped quotes. Single-quoted values are taken literally.
+  - Read errors are reported instead of being ignored.
+
+### Added
+- Tests for `pkg/config` and `pkg/view`, which had none.
+
 ## [v1.12.0] - 2026-11-16
 
 ### Added

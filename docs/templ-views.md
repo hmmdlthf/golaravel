@@ -101,3 +101,19 @@ Use Artisan to compile all `.templ` files across your project:
 ```bash
 artisan generate
 ```
+
+
+## Method spoofing (`@method`)
+
+HTML forms can only send GET and POST. Add `@view.Method("PUT")` (or `"PATCH"`, `"DELETE"`) inside a
+POST form, and the engine routes the request to your `PUT` / `PATCH` / `DELETE` route. An
+`X-HTTP-Method-Override` header does the same for clients that can't set the method. Other
+methods, and GET requests, are never overridden. Turn it off with `app.MethodOverride(false)`.
+
+```go
+<form method="POST" action="/posts/1">
+    @view.CSRF(view.CSRFToken(c))
+    @view.Method("DELETE")
+    <button>Delete</button>
+</form>
+```
