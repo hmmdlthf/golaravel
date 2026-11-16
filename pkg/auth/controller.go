@@ -140,7 +140,9 @@ func (r *RegisterRequest) Validate(v *validation.Validator) {
 		Required("email", r.Email).
 		Email("email", r.Email).
 		Required("password", r.Password).
-		MinLength("password", r.Password, 8)
+		MinLength("password", r.Password, 8).
+		// bcrypt only uses the first 72 bytes and refuses longer input.
+		Rule("password", "The password may not be longer than 72 bytes.", len(r.Password) <= 72)
 }
 
 type LoginRequest struct {
@@ -186,7 +188,9 @@ func (r *ResetPasswordRequest) Validate(v *validation.Validator) {
 		Email("email", r.Email).
 		Required("token", r.Token).
 		Required("password", r.Password).
-		MinLength("password", r.Password, 8)
+		MinLength("password", r.Password, 8).
+		// bcrypt only uses the first 72 bytes and refuses longer input.
+		Rule("password", "The password may not be longer than 72 bytes.", len(r.Password) <= 72)
 }
 
 type TwoFactorConfirmRequest struct {
