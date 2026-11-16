@@ -2,8 +2,10 @@ package middleware
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/golaravel/golaravel/pkg/context"
@@ -34,7 +36,7 @@ func CSRF() context.HandlerFunc {
 				Value:    token,
 				Path:     "/",
 				HttpOnly: false, // Accessible by JS frontend (Inertia/Axios)
-				Secure:   c.Request.TLS != nil,
+				Secure:   c.Request.TLS != nil || strings.EqualFold(c.Header("X-Forwarded-Proto"), "https"),
 				SameSite: http.SameSiteLaxMode,
 				Expires:  time.Now().Add(24 * time.Hour),
 			})
@@ -58,7 +60,7 @@ func CSRF() context.HandlerFunc {
 			headerToken = c.Request.FormValue(CSRFFormField)
 		}
 
-		if headerToken == "" || headerToken != token {
+		if headerToken == "" || subtle.ConstantTimeCompare([]byte(headerToken), []byte(token)) != 1 {
 			c.AbortWithStatus(http.StatusForbidden)
 			return c.JSON(http.StatusForbidden, map[string]string{
 				"error":   "Forbidden",
