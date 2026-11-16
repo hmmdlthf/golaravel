@@ -265,3 +265,13 @@ func TestSupport_HierarchicalEscalation(t *testing.T) {
 		t.Errorf("expected escalation message in ticket transcript")
 	}
 }
+
+func TestTicketIDsAreUnguessable(t *testing.T) {
+	id := GenerateTicketID()
+	if len(id) != len("TKT-")+32 {
+		t.Fatalf("ticket IDs must carry 128 bits: %q", id)
+	}
+	if GenerateTicketID() == id {
+		t.Fatal("ticket IDs repeat")
+	}
+}

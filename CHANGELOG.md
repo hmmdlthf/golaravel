@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.16.0] - 2026-11-16
+
+### Security
+- **Support ticket IDs (`pkg/support`)**: `GenerateTicketID` produced only 32 bits of randomness (`TKT-` plus 8 hex characters), which can be brute-forced. For visitors who aren't signed in, the ticket ID is their only access to the ticket, so IDs now carry 128 bits (`TKT-` plus 32 hex characters).
+
 ## [v1.15.0] - 2026-11-16
 
 ### Security

@@ -340,9 +340,12 @@ func (s *MemorySupportStore) EscalateTicket(ctx context.Context, id string, targ
 	return nil
 }
 
-// GenerateTicketID returns a unique random ticket ID.
+// GenerateTicketID returns a random ticket ID with 128 bits of entropy.
+// For visitors who are not signed in, the ID is the only thing that
+// grants access to their ticket, so it must not be guessable (it used to
+// carry 32 bits, which can be brute-forced).
 func GenerateTicketID() string {
-	b := make([]byte, 4)
+	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	return fmt.Sprintf("TKT-%s", hex.EncodeToString(b))
 }
