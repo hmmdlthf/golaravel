@@ -250,10 +250,21 @@ type TwoFactorChallengeBroker struct {
 
 // NewTwoFactorChallengeBroker creates a broker with 5-minute challenge token TTL.
 func NewTwoFactorChallengeBroker(secret string) *TwoFactorChallengeBroker {
+	// Challenge tokens are proof of the password only. They are signed with
+	// a key derived from the secret, so a manager verifying access tokens
+	// with the plain secret can never accept one as a login.
+	key := ""
+	if secret != "" {
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write([]byte("golaravel:2fa-challenge"))
+		key = hex.EncodeToString(mac.Sum(nil))
+	}
 	return &TwoFactorChallengeBroker{
-		jwt: NewJWTManager(secret, 5*time.Minute),
+		jwt: NewJWTManager(key, 5*time.Minute).Audience(challengeAudience),
 	}
 }
+
+const challengeAudience = "golaravel:2fa-challenge"
 
 // GenerateChallengeToken creates a temporary token containing the user ID and 2fa challenge action.
 func (b *TwoFactorChallengeBroker) GenerateChallengeToken(userID string) (string, error) {

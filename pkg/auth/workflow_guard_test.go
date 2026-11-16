@@ -159,3 +159,30 @@ func (c countingChannel) Send(context.Context, notification.Notifiable, notifica
 }
 
 func jsonUnmarshal(b []byte, v any) error { return json.Unmarshal(b, v) }
+
+// Regression: the 2FA challenge token (issued after the password only)
+// was accepted by BearerGuard as a full access token.
+func TestChallengeTokenIsNotAnAccessToken(t *testing.T) {
+	f := newGuardFixture(t)
+	tok := challenge(t, f)
+	ratelimit.SetStore(ratelimit.NewMemoryStore())
+	rec := f.post("/auth/two-factor/disable", `{"password":"correct-horse"}`, tok)
+	if rec.Code != http.StatusUnauthorized || !f.user.TwoFactorEnabled {
+		t.Fatalf("challenge token used as Bearer: %d enabled=%v", rec.Code, f.user.TwoFactorEnabled)
+	}
+	if _, _, err := AuthenticateCookieValueForTest(tok); err == nil {
+		t.Fatal("challenge token accepted by the cookie guard path")
+	}
+}
+
+func AuthenticateCookieValueForTest(tok string) (Authenticatable, *JWTClaims, error) {
+	m := NewJWTManager("guard-test-secret-32-characters!!", time.Hour)
+	claims, err := m.VerifyToken(tok)
+	if err != nil {
+		return nil, nil, err
+	}
+	if isChallengeToken(claims) {
+		return nil, nil, ErrTokenInvalid
+	}
+	return &SimpleUser{ID: claims.Sub}, claims, nil
+}
