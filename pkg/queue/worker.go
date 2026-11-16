@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"reflect"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -168,7 +169,7 @@ func (wp *WorkerPool) executeJob(ctx context.Context, workerID int, payload *Job
 	}
 
 	start := time.Now()
-	err := job.Handle(execCtx)
+	err := runJob(execCtx, job)
 	duration := time.Since(start)
 
 	if err != nil {
@@ -214,4 +215,16 @@ func (wp *WorkerPool) moveToDLQ(payload *JobPayload, jobErr error) {
 	}
 
 	_ = wp.dlq.Log(failed)
+}
+
+// runJob runs a job, turning a panic into an error so it is retried or
+// sent to the dead-letter queue instead of crashing the worker process.
+func runJob(ctx context.Context, job Job) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("queue: job panicked: %v", r)
+			slog.Error("Job panicked", "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+	return job.Handle(ctx)
 }

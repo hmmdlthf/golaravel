@@ -3,7 +3,9 @@ package auth
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -66,6 +68,7 @@ type WorkflowController struct {
 	callbacks          WorkflowCallbacks
 	appName            string
 	appURL             string
+	replay             totpReplay
 }
 
 // WorkflowConfig configures the turnkey WorkflowController.
@@ -137,7 +140,9 @@ func (r *RegisterRequest) Validate(v *validation.Validator) {
 		Required("email", r.Email).
 		Email("email", r.Email).
 		Required("password", r.Password).
-		MinLength("password", r.Password, 8)
+		MinLength("password", r.Password, 8).
+		// bcrypt only uses the first 72 bytes and refuses longer input.
+		Rule("password", "The password may not be longer than 72 bytes.", len(r.Password) <= 72)
 }
 
 type LoginRequest struct {
@@ -183,7 +188,9 @@ func (r *ResetPasswordRequest) Validate(v *validation.Validator) {
 		Email("email", r.Email).
 		Required("token", r.Token).
 		Required("password", r.Password).
-		MinLength("password", r.Password, 8)
+		MinLength("password", r.Password, 8).
+		// bcrypt only uses the first 72 bytes and refuses longer input.
+		Rule("password", "The password may not be longer than 72 bytes.", len(r.Password) <= 72)
 }
 
 type TwoFactorConfirmRequest struct {
@@ -226,7 +233,8 @@ func (ctrl *WorkflowController) Register(c *gcontext.Context) error {
 	if ctrl.callbacks.CreateUser != nil {
 		user, err = ctrl.callbacks.CreateUser(c.Context(), req.Email, pwdHash, req.Name)
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			slog.Error("auth: CreateUser failed", "error", err)
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Registration failed"})
 		}
 	} else {
 		user = &SimpleWorkflowUser{
@@ -261,8 +269,16 @@ func (ctrl *WorkflowController) Login(c *gcontext.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "User lookup not configured"})
 	}
 
+	key := throttleKey("login", req.Email, c.ClientIP())
+	if throttled(c, key, LoginAttempts, LoginWindow) {
+		return nil
+	}
 	user, err := ctrl.callbacks.FindByEmail(c.Context(), req.Email)
-	if err != nil || user == nil || !hash.Check(req.Password, user.GetPasswordHash()) {
+	if err != nil {
+		user = nil
+	}
+	if !checkPasswordConstantTime(user, req.Password) {
+		recordFailure(key, LoginAttempts, LoginWindow)
 		return c.JSON(http.StatusUnauthorized, map[string]string{
 			"error":   "Unauthorized",
 			"message": "Invalid email or password",
@@ -320,9 +336,21 @@ func (ctrl *WorkflowController) TwoFactorChallenge(c *gcontext.Context) error {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized", "message": "User not found"})
 	}
 
+	twoFAKey := throttleKey("2fa", userID)
+	if throttled(c, twoFAKey, TwoFactorAttempts, TwoFactorWindow) {
+		return nil
+	}
+
 	// Verify via TOTP code
+	verified := false
 	if req.Code != "" {
-		if !ctrl.totp.VerifyCode(user.GetTwoFactorSecret(), req.Code) {
+		ok, step := ctrl.totp.VerifyCodeStep(user.GetTwoFactorSecret(), req.Code)
+		if ok && !ctrl.replay.accept(userID, step) {
+			ok = false // the same code was already used
+		}
+		verified = ok
+		if !ok {
+			recordFailure(twoFAKey, TwoFactorAttempts, TwoFactorWindow)
 			return c.JSON(http.StatusUnprocessableEntity, map[string]any{
 				"message": "The provided two-factor authentication code was invalid.",
 				"errors": map[string][]string{
@@ -333,7 +361,9 @@ func (ctrl *WorkflowController) TwoFactorChallenge(c *gcontext.Context) error {
 	} else if req.RecoveryCode != "" {
 		// Verify via single-use Recovery Code
 		ok, remaining := ctrl.totp.VerifyRecoveryCode(req.RecoveryCode, user.GetRecoveryCodes())
+		verified = ok
 		if !ok {
+			recordFailure(twoFAKey, TwoFactorAttempts, TwoFactorWindow)
 			return c.JSON(http.StatusUnprocessableEntity, map[string]any{
 				"message": "The provided recovery code was invalid.",
 				"errors": map[string][]string{
@@ -341,10 +371,22 @@ func (ctrl *WorkflowController) TwoFactorChallenge(c *gcontext.Context) error {
 				},
 			})
 		}
-		// Persist remaining recovery codes
-		if ctrl.callbacks.UpdateRecoveryCodes != nil {
-			_ = ctrl.callbacks.UpdateRecoveryCodes(c.Context(), user.GetAuthIdentifier(), remaining)
+		// Persist remaining recovery codes. Without that the code would
+		// stay usable, so refuse rather than accept it silently.
+		if ctrl.callbacks.UpdateRecoveryCodes == nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Recovery codes cannot be consumed (UpdateRecoveryCodes not configured)"})
 		}
+		if err := ctrl.callbacks.UpdateRecoveryCodes(c.Context(), user.GetAuthIdentifier(), remaining); err != nil {
+			slog.Error("auth: UpdateRecoveryCodes failed", "error", err)
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Could not consume the recovery code"})
+		}
+	}
+	if !verified {
+		// Defence in depth: never issue a token without a verified factor.
+		return c.JSON(http.StatusUnprocessableEntity, map[string]any{
+			"message": "A two-factor code or recovery code is required.",
+			"errors":  map[string][]string{"code": {"The code field is required."}},
+		})
 	}
 
 	token, err := ctrl.jwt.GenerateToken(user.GetAuthIdentifier())
@@ -415,7 +457,8 @@ func (ctrl *WorkflowController) TwoFactorConfirm(c *gcontext.Context) error {
 
 	if ctrl.callbacks.EnableTwoFactor != nil {
 		if err := ctrl.callbacks.EnableTwoFactor(c.Context(), user.GetAuthIdentifier(), req.Secret, hashedCodes); err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			slog.Error("auth: workflow callback failed", "error", err)
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal error"})
 		}
 	}
 
@@ -426,15 +469,47 @@ func (ctrl *WorkflowController) TwoFactorConfirm(c *gcontext.Context) error {
 }
 
 // TwoFactorDisable turns off 2FA for the authenticated user.
+//
+// It requires the current password or a current 2FA code, so a stolen
+// access token alone cannot remove the second factor.
 func (ctrl *WorkflowController) TwoFactorDisable(c *gcontext.Context) error {
 	user := User(c)
 	if user == nil {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
 	}
+	var req struct {
+		Password string `json:"password"`
+		Code     string `json:"code"`
+	}
+	_ = c.BindJSON(&req)
+	if ctrl.callbacks.FindByID == nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "User lookup not configured"})
+	}
+	u, err := ctrl.callbacks.FindByID(c.Context(), user.GetAuthIdentifier())
+	if err != nil || u == nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
+	}
+	key := throttleKey("2fa", u.GetAuthIdentifier())
+	if throttled(c, key, TwoFactorAttempts, TwoFactorWindow) {
+		return nil
+	}
+	confirmed := req.Password != "" && checkPasswordConstantTime(u, req.Password)
+	if !confirmed && req.Code != "" {
+		ok, step := ctrl.totp.VerifyCodeStep(u.GetTwoFactorSecret(), req.Code)
+		confirmed = ok && ctrl.replay.accept(u.GetAuthIdentifier(), step)
+	}
+	if !confirmed {
+		recordFailure(key, TwoFactorAttempts, TwoFactorWindow)
+		return c.JSON(http.StatusUnprocessableEntity, map[string]any{
+			"message": "Confirm with your password or a current two-factor code.",
+			"errors":  map[string][]string{"password": {"The password or code is incorrect."}},
+		})
+	}
 
 	if ctrl.callbacks.DisableTwoFactor != nil {
 		if err := ctrl.callbacks.DisableTwoFactor(c.Context(), user.GetAuthIdentifier()); err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			slog.Error("auth: workflow callback failed", "error", err)
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal error"})
 		}
 	}
 
@@ -450,18 +525,31 @@ func (ctrl *WorkflowController) ForgotPassword(c *gcontext.Context) error {
 		return nil
 	}
 
+	sent := map[string]string{"message": "We have emailed your password reset link."}
+	resetKey := throttleKey("reset", req.Email)
+	if throttled(c, resetKey, ResetEmails, ResetWindow) {
+		return nil
+	}
+	recordFailure(resetKey, ResetEmails, ResetWindow)
+	// Only email addresses that belong to an account; answer the same way
+	// either way so the endpoint does not reveal who has one (and cannot
+	// be used to send mail to arbitrary addresses).
+	if ctrl.callbacks.FindByEmail != nil {
+		if u, err := ctrl.callbacks.FindByEmail(c.Context(), req.Email); err != nil || u == nil {
+			return c.JSON(http.StatusOK, sent)
+		}
+	}
+
 	token, err := ctrl.passwordResets.CreateToken(req.Email)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create reset token"})
 	}
 
-	resetURL := fmt.Sprintf("%s/reset-password?token=%s&email=%s", ctrl.appURL, token, req.Email)
+	resetURL := fmt.Sprintf("%s/reset-password?token=%s&email=%s", ctrl.appURL, url.QueryEscape(token), url.QueryEscape(req.Email))
 	recipient := notification.OnDemand("mail", req.Email)
 	_ = notification.SendOne(c.Context(), recipient, NewResetPasswordNotification(resetURL, ctrl.appName))
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "We have emailed your password reset link.",
-	})
+	return c.JSON(http.StatusOK, sent)
 }
 
 // ResetPassword validates the token and updates the password.
@@ -491,7 +579,8 @@ func (ctrl *WorkflowController) ResetPassword(c *gcontext.Context) error {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "User not found"})
 		}
 		if err := ctrl.callbacks.UpdatePassword(c.Context(), user.GetAuthIdentifier(), pwdHash); err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			slog.Error("auth: workflow callback failed", "error", err)
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Internal error"})
 		}
 	}
 

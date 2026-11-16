@@ -45,6 +45,10 @@ func AuthenticateBearer(c *context.Context, jwt *JWTManager, provider ...UserPro
 	if err != nil {
 		return nil, nil, err
 	}
+	if isChallengeToken(claims) {
+		// A 2FA challenge proves the password only, never a login.
+		return nil, nil, ErrTokenInvalid
+	}
 
 	var user Authenticatable = &SimpleUser{ID: claims.Sub}
 	if len(provider) > 0 && provider[0] != nil {
@@ -95,4 +99,10 @@ func Claims(c *context.Context) *JWTClaims {
 		}
 	}
 	return nil
+}
+
+// isChallengeToken reports whether claims belong to a 2FA challenge token
+// (pending second factor), which must never authenticate a request.
+func isChallengeToken(claims *JWTClaims) bool {
+	return claims.Aud == challengeAudience || claims.Custom["action"] == "2fa_challenge"
 }

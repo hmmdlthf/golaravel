@@ -53,6 +53,12 @@ func (d *Dispatcher) DispatchAsync(eventName string, payload any) {
 	d.mu.RUnlock()
 
 	go func() {
+		// A panicking listener must not crash the process.
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("event listener panicked", "event", eventName, "panic", r)
+			}
+		}()
 		for _, handler := range handlers {
 			if err := handler(payload); err != nil {
 				slog.Error("event listener error", "event", eventName, "error", err)
@@ -62,6 +68,8 @@ func (d *Dispatcher) DispatchAsync(eventName string, payload any) {
 }
 
 // Global helper functions
-func Listen(eventName string, listener Listener)    { globalDispatcher.Listen(eventName, listener) }
-func Dispatch(eventName string, payload any) error { return globalDispatcher.Dispatch(eventName, payload) }
-func DispatchAsync(eventName string, payload any)  { globalDispatcher.DispatchAsync(eventName, payload) }
+func Listen(eventName string, listener Listener) { globalDispatcher.Listen(eventName, listener) }
+func Dispatch(eventName string, payload any) error {
+	return globalDispatcher.Dispatch(eventName, payload)
+}
+func DispatchAsync(eventName string, payload any) { globalDispatcher.DispatchAsync(eventName, payload) }

@@ -35,6 +35,9 @@ func AuthenticateCookie(c *context.Context, jwt *JWTManager, cookieName string, 
 	if err != nil {
 		return nil, nil, err
 	}
+	if isChallengeToken(claims) {
+		return nil, nil, ErrTokenInvalid
+	}
 
 	var user Authenticatable = &SimpleUser{ID: claims.Sub}
 	if len(provider) > 0 && provider[0] != nil {

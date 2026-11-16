@@ -398,7 +398,7 @@ func (b *BaseProvider) storeState(c *context.Context, state string) {
 	if session.FromContext(c) != nil {
 		session.Put(c, b.stateKey(), state)
 	} else {
-		c.SetCookie(b.stateKey(), state, 300, "/", "", false, true)
+		c.SetCookie(b.stateKey(), state, 300, "/", "", secureRequest(c), true)
 	}
 }
 
@@ -412,7 +412,7 @@ func (b *BaseProvider) retrieveState(c *context.Context) string {
 
 	val, err := c.Cookie(b.stateKey())
 	if err == nil {
-		c.SetCookie(b.stateKey(), "", -1, "/", "", false, true)
+		c.SetCookie(b.stateKey(), "", -1, "/", "", secureRequest(c), true)
 		return val
 	}
 	return ""
@@ -422,7 +422,7 @@ func (b *BaseProvider) storeCodeVerifier(c *context.Context, verifier string) {
 	if session.FromContext(c) != nil {
 		session.Put(c, b.verifierKey(), verifier)
 	} else {
-		c.SetCookie(b.verifierKey(), verifier, 300, "/", "", false, true)
+		c.SetCookie(b.verifierKey(), verifier, 300, "/", "", secureRequest(c), true)
 	}
 }
 
@@ -436,8 +436,14 @@ func (b *BaseProvider) retrieveCodeVerifier(c *context.Context) string {
 
 	val, err := c.Cookie(b.verifierKey())
 	if err == nil {
-		c.SetCookie(b.verifierKey(), "", -1, "/", "", false, true)
+		c.SetCookie(b.verifierKey(), "", -1, "/", "", secureRequest(c), true)
 		return val
 	}
 	return ""
+}
+
+// secureRequest reports whether the request came over HTTPS (directly or
+// through a proxy), so the state / PKCE cookies get the Secure flag.
+func secureRequest(c *context.Context) bool {
+	return c.Request != nil && (c.Request.TLS != nil || strings.EqualFold(c.Header("X-Forwarded-Proto"), "https"))
 }
