@@ -153,3 +153,35 @@ app.Use(session.VerifyCSRFToken())
 Clients can send the token via:
 - HTTP Header: `X-CSRF-TOKEN` or `X-XSRF-TOKEN`
 - Form Input: `<input type="hidden" name="_token" value="..." />`
+
+## Persistent session drivers (SQL and Redis)
+
+The memory, file and cookie drivers keep sessions on one machine. To keep sessions across
+restarts and share them between instances, use the SQL or Redis driver. Every instance must use
+the same `SecretKey`.
+
+```go
+import (
+    "github.com/golaravel/golaravel/pkg/database"
+    "github.com/golaravel/golaravel/pkg/redis"
+    "github.com/golaravel/golaravel/pkg/session"
+)
+
+// SQL (SQLite, MySQL or Postgres): create the table once.
+drv, err := session.NewSQLDriver(db, database.Postgres) // table "sessions"
+if err := drv.Migrate(ctx); err != nil { ... }
+
+// Or Redis: keys expire with the session lifetime.
+rc, err := redis.New(redis.Config{Addr: "127.0.0.1:6379"})
+drv := session.NewRedisDriver(rc)
+
+mgr := session.NewManager(session.Config{
+    Driver:    drv,
+    SecretKey: os.Getenv("APP_KEY"),
+    Lifetime:  2 * time.Hour,
+})
+mgr.StartGC(ctx, 10*time.Minute) // removes idle sessions (memory, file and SQL drivers)
+```
+
+The drivers take the lifetime from the `Manager`. A SQL session that has been idle longer than
+the lifetime is treated as missing on read, and `GC` deletes it.
