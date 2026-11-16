@@ -3,6 +3,7 @@ package broadcast
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/goccy/go-json"
 	"github.com/golaravel/golaravel/pkg/context"
@@ -10,14 +11,25 @@ import (
 
 // SSEHandler returns a handler streaming Server-Sent Events (SSE) to connected clients.
 // Works natively with browser EventSource without any client libraries.
+//
+// Channels are authorized like WebSocket subscriptions: see Channel and
+// SSEHandlerWith.
 func SSEHandler(h ...*Hub) context.HandlerFunc {
-	hub := DefaultHub()
-	if len(h) > 0 && h[0] != nil {
-		hub = h[0]
+	opts := Options{}
+	if len(h) > 0 {
+		opts.Hub = h[0]
 	}
+	return SSEHandlerWith(opts)
+}
 
+// SSEHandlerWith is SSEHandler with options.
+func SSEHandlerWith(opts Options) context.HandlerFunc {
+	hub := opts.hub()
 	return func(c *context.Context) error {
 		channel := c.DefaultQuery("channel", "default")
+		if !opts.authorizeChannel(c, channel) {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "channel_forbidden", "channel": channel})
+		}
 
 		flusher, ok := c.Response.ResponseWriter.(http.Flusher)
 		if !ok {
@@ -35,7 +47,8 @@ func SSEHandler(h ...*Hub) context.HandlerFunc {
 		defer unsubscribe()
 
 		// Send initial connected event
-		_, _ = fmt.Fprintf(&c.Response, "event: connected\ndata: {\"channel\":\"%s\"}\n\n", channel)
+		hello, _ := json.Marshal(map[string]string{"channel": channel})
+		_, _ = fmt.Fprintf(&c.Response, "event: connected\ndata: %s\n\n", hello)
 		flusher.Flush()
 
 		ctx := c.Request.Context()
@@ -53,7 +66,10 @@ func SSEHandler(h ...*Hub) context.HandlerFunc {
 					continue
 				}
 
-				_, err = fmt.Fprintf(&c.Response, "event: %s\ndata: %s\n\n", msg.Event, string(dataBytes))
+				// Event names come from application code, but never let one
+				// break the SSE framing.
+				event := strings.NewReplacer("\r", "", "\n", "").Replace(msg.Event)
+				_, err = fmt.Fprintf(&c.Response, "event: %s\ndata: %s\n\n", event, string(dataBytes))
 				if err != nil {
 					return nil
 				}

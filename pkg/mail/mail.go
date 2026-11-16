@@ -4,9 +4,12 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/smtp"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Driver defines the mail sending driver interface.
@@ -87,8 +90,11 @@ type SMTPConfig struct {
 	Port               int
 	Username           string
 	Password           string
-	Encryption         string // "tls", "starttls", or ""
+	Encryption         string // "tls" (implicit), "starttls" (required), or "" (STARTTLS when offered)
 	InsecureSkipVerify bool
+	// Timeout bounds connecting and the SMTP conversation (default 30s,
+	// plus a second per 64 KiB of message).
+	Timeout time.Duration
 }
 
 // SMTPDriver sends emails via an external SMTP server with MIME support.
@@ -102,7 +108,7 @@ func NewSMTPDriver(cfg SMTPConfig) *SMTPDriver {
 }
 
 func (d *SMTPDriver) Send(msg *Message) error {
-	addr := fmt.Sprintf("%s:%d", d.cfg.Host, d.cfg.Port)
+	addr := net.JoinHostPort(d.cfg.Host, strconv.Itoa(d.cfg.Port))
 	recipients := msg.AllRecipients()
 	if len(recipients) == 0 {
 		return fmt.Errorf("mail: cannot send message with no recipients")
@@ -113,60 +119,75 @@ func (d *SMTPDriver) Send(msg *Message) error {
 		return fmt.Errorf("mail: failed to construct MIME message: %w", err)
 	}
 
-	// Implicit SSL/TLS on port 465
-	if strings.ToLower(d.cfg.Encryption) == "tls" || d.cfg.Port == 465 {
-		tlsConfig := &tls.Config{
-			ServerName:         d.cfg.Host,
-			InsecureSkipVerify: d.cfg.InsecureSkipVerify,
-		}
-		conn, err := tls.Dial("tcp", addr, tlsConfig)
-		if err != nil {
-			return fmt.Errorf("mail: TLS connection failed: %w", err)
-		}
-		defer conn.Close()
+	timeout := d.cfg.Timeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	tlsConfig := &tls.Config{ServerName: d.cfg.Host, InsecureSkipVerify: d.cfg.InsecureSkipVerify}
+	mode := strings.ToLower(d.cfg.Encryption)
+	implicitTLS := mode == "tls" || d.cfg.Port == 465
 
-		c, err := smtp.NewClient(conn, d.cfg.Host)
-		if err != nil {
-			return fmt.Errorf("mail: SMTP client initialization failed: %w", err)
-		}
-		defer c.Close()
+	dialer := &net.Dialer{Timeout: timeout}
+	var conn net.Conn
+	if implicitTLS {
+		conn, err = tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
+	} else {
+		conn, err = dialer.Dial("tcp", addr)
+	}
+	if err != nil {
+		return fmt.Errorf("mail: connection to %s failed: %w", addr, err)
+	}
+	defer conn.Close()
+	// One deadline for the whole conversation, so a stuck server cannot
+	// block the sender forever.
+	_ = conn.SetDeadline(time.Now().Add(timeout + time.Duration(len(mimeBytes)/(64<<10))*time.Second))
 
-		if d.cfg.Username != "" {
-			auth := smtp.PlainAuth("", d.cfg.Username, d.cfg.Password, d.cfg.Host)
-			if err := c.Auth(auth); err != nil {
-				return fmt.Errorf("mail: SMTP authentication failed: %w", err)
+	c, err := smtp.NewClient(conn, d.cfg.Host)
+	if err != nil {
+		return fmt.Errorf("mail: SMTP client initialization failed: %w", err)
+	}
+	defer c.Close()
+
+	if !implicitTLS {
+		ok, _ := c.Extension("STARTTLS")
+		switch {
+		case ok:
+			if err := c.StartTLS(tlsConfig); err != nil {
+				return fmt.Errorf("mail: STARTTLS failed: %w", err)
 			}
+		case mode == "starttls":
+			// Required: never fall back to plain text when TLS was asked
+			// for (an attacker can strip the STARTTLS offer).
+			return fmt.Errorf("mail: server %s does not offer STARTTLS", addr)
 		}
-
-		if err := c.Mail(msg.FromAddress); err != nil {
-			return err
-		}
-		for _, rcpt := range recipients {
-			if err := c.Rcpt(rcpt); err != nil {
-				return err
-			}
-		}
-
-		w, err := c.Data()
-		if err != nil {
-			return err
-		}
-		if _, err := w.Write(mimeBytes); err != nil {
-			return err
-		}
-		if err := w.Close(); err != nil {
-			return err
-		}
-		return c.Quit()
 	}
 
-	// Standard plain / STARTTLS
-	var auth smtp.Auth
 	if d.cfg.Username != "" {
-		auth = smtp.PlainAuth("", d.cfg.Username, d.cfg.Password, d.cfg.Host)
+		// smtp.PlainAuth refuses to send credentials over an unencrypted
+		// connection to anything but localhost.
+		if err := c.Auth(smtp.PlainAuth("", d.cfg.Username, d.cfg.Password, d.cfg.Host)); err != nil {
+			return fmt.Errorf("mail: SMTP authentication failed: %w", err)
+		}
 	}
-
-	return smtp.SendMail(addr, auth, msg.FromAddress, recipients, mimeBytes)
+	if err := c.Mail(msg.FromAddress); err != nil {
+		return err
+	}
+	for _, rcpt := range recipients {
+		if err := c.Rcpt(rcpt); err != nil {
+			return err
+		}
+	}
+	w, err := c.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(mimeBytes); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return c.Quit()
 }
 
 // Global default driver is LogDriver

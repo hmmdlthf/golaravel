@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Security
+- **Broadcast channels (`pkg/broadcast`)**:
+  - **Anyone could listen on any channel.** The SSE handler took `?channel=`, and the WebSocket handler subscribed to whatever channel the client named. `broadcast.Channel("orders.{id}", fn)` now registers authorization callbacks, like Laravel's channel routes. `private-` and `presence-` channels without a rule are refused, and other channels stay public. `Options.Authorize` can decide every subscription instead.
+  - **Cross-site WebSocket hijacking.** WebSockets accepted every `Origin`, so any site could open one with the user's cookies. Now only the same origin, clients that send no `Origin`, and `Options.AllowedOrigins` are accepted.
+  - **Smaller fixes:** the SSE `connected` event escapes the channel name (it was written raw, allowing JSON and SSE frame injection), event names are stripped of newlines, channel names with control characters are refused, and a WebSocket may hold at most `MaxSubscriptions` (100) channels.
+  - New: `SSEHandlerWith` / `WebSocketHandlerWith(Options)`.
+- **Signed storage URLs (`pkg/storage`)**: `NewLocalDriver` signed temporary download and upload URLs with a hard-coded fallback key when `APP_KEY` / `STORAGE_SECRET` was unset, so anyone could forge them. It now uses a random per-process key (with a warning), and refuses the old public key.
+- **Tenancy (`pkg/privacy`)**: `TenantMiddleware` trusted whatever tenant the client named (`X-Tenant-ID`, query, route parameter or subdomain). New `TenantMiddlewareOptions.Authorize` checks membership and answers 403 when it fails. Without it, a one-time warning is logged.
+- **SMTP (`pkg/mail`)**: `Encryption: "starttls"` silently fell back to plain text when the server didn't offer STARTTLS (an attacker can strip the offer); it is now required. Connections and the SMTP conversation have timeouts (`SMTPConfig.Timeout`, default 30s).
+- **HTTP client (`pkg/http`)**: response bodies are capped at 64 MiB (`MaxResponseSize`, `ErrResponseTooLarge`) instead of being read fully into memory.
+- **Metrics (`pkg/telemetry`)**:
+  - Path labels are capped (`MaxPaths`, default 500; the rest count as `other`), so random URLs can't grow the metrics without bound.
+  - `NormalizePaths` now works: ID-like segments become `:id`.
+  - `traceparent` IDs must be lowercase hex and non-zero.
+- **Flutter (`pkg/flutter`)**: `Version` and `BuildID` are escaped in the injected HTML.
+
+### Breaking
+- **Cross-origin WebSockets:** browser WebSockets from another origin, such as a Flutter web build on a different host, need `broadcast.WebSocketHandlerWith(broadcast.Options{AllowedOrigins: [...]})`.
+- **Private channels:** subscriptions to `private-` / `presence-` channels need a matching `broadcast.Channel` rule.
+- **Signed storage URLs:** they stop working across restarts until `APP_KEY` or `STORAGE_SECRET` is set.
+- **SMTP:** `Encryption: "starttls"` fails against servers that don't offer STARTTLS.
+
 ## [v1.13.0] - 2026-11-16
 
 ### Fixed
