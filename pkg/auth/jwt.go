@@ -14,6 +14,11 @@ import (
 var (
 	ErrTokenExpired = errors.New("auth: token has expired")
 	ErrTokenInvalid = errors.New("auth: token signature or format is invalid")
+	// ErrEmptySecret is returned when the manager has no signing secret:
+	// an empty HMAC key would let anyone mint valid tokens.
+	ErrEmptySecret = errors.New("auth: JWT secret is empty")
+	// ErrTokenRevoked is returned when the RevokedUsing check rejects a token.
+	ErrTokenRevoked = errors.New("auth: token has been revoked")
 )
 
 // JWTHeader represents the header of a JWT.
@@ -24,16 +29,25 @@ type JWTHeader struct {
 
 // JWTClaims represents standard registered claims.
 type JWTClaims struct {
-	Sub       string         `json:"sub"`                 // Subject (User ID)
-	Exp       int64          `json:"exp"`                 // Expiration time
-	Iat       int64          `json:"iat"`                 // Issued at
-	Custom    map[string]any `json:"custom,omitempty"`    // Custom claims
+	Sub    string         `json:"sub"`              // Subject (User ID)
+	Exp    int64          `json:"exp"`              // Expiration time
+	Iat    int64          `json:"iat"`              // Issued at
+	Custom map[string]any `json:"custom,omitempty"` // Custom claims
 }
 
 // JWTManager handles signing and validating JWT bearer tokens.
 type JWTManager struct {
-	secret []byte
-	ttl    time.Duration
+	secret  []byte
+	ttl     time.Duration
+	revoked func(claims *JWTClaims) bool
+}
+
+// RevokedUsing registers a check run on every verified token; returning true
+// rejects the token with ErrTokenRevoked (for example after logout, a
+// password change, or when the user's sessions are revoked).
+func (m *JWTManager) RevokedUsing(fn func(claims *JWTClaims) bool) *JWTManager {
+	m.revoked = fn
+	return m
 }
 
 // NewJWTManager creates a new JWT manager with the given secret and token time-to-live.
@@ -46,6 +60,9 @@ func NewJWTManager(secret string, ttl time.Duration) *JWTManager {
 
 // GenerateToken creates a signed JWT string for the given subject (user ID) and optional custom claims.
 func (m *JWTManager) GenerateToken(sub string, custom ...map[string]any) (string, error) {
+	if len(m.secret) == 0 {
+		return "", ErrEmptySecret
+	}
 	header := JWTHeader{Alg: "HS256", Typ: "JWT"}
 	headerJSON, err := json.Marshal(header)
 	if err != nil {
@@ -79,8 +96,20 @@ func (m *JWTManager) GenerateToken(sub string, custom ...map[string]any) (string
 
 // VerifyToken validates a JWT and returns the parsed claims.
 func (m *JWTManager) VerifyToken(tokenString string) (*JWTClaims, error) {
+	if len(m.secret) == 0 {
+		return nil, ErrEmptySecret
+	}
 	parts := strings.Split(tokenString, ".")
 	if len(parts) != 3 {
+		return nil, ErrTokenInvalid
+	}
+	// Only HS256 is ever issued; refuse anything else (e.g. "none").
+	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return nil, ErrTokenInvalid
+	}
+	var header JWTHeader
+	if err := json.Unmarshal(headerBytes, &header); err != nil || header.Alg != "HS256" {
 		return nil, ErrTokenInvalid
 	}
 
@@ -103,6 +132,9 @@ func (m *JWTManager) VerifyToken(tokenString string) (*JWTClaims, error) {
 
 	if time.Now().Unix() > claims.Exp {
 		return nil, ErrTokenExpired
+	}
+	if m.revoked != nil && m.revoked(&claims) {
+		return nil, ErrTokenRevoked
 	}
 
 	return &claims, nil
