@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.13.0] - 2026-11-16
 
 ### Fixed
 - **Form method spoofing didn't work.** `view.Method("PUT")` emitted a `_method` field, but nothing read it, so HTML forms could never reach PUT, PATCH or DELETE routes. The engine now routes a POST with `_method` (or an `X-HTTP-Method-Override` header) of PUT, PATCH or DELETE as that method, before routing. GET is never overridden. Turn it off with `Engine.MethodOverride(false)`.
