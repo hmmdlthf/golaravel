@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -42,6 +43,22 @@ type PendingRequest struct {
 	form       url.Values
 	files      []fileAttachment
 	ctx        context.Context
+	maxResp    int64
+}
+
+// DefaultMaxResponseSize caps how much of a response body is read into
+// memory unless MaxResponseSize changes it.
+const DefaultMaxResponseSize int64 = 64 << 20
+
+// ErrResponseTooLarge is returned when a response body exceeds the limit.
+var ErrResponseTooLarge = errors.New("http: response body exceeds the size limit")
+
+// MaxResponseSize sets the largest response body read into memory; a
+// bigger one fails with ErrResponseTooLarge instead of exhausting memory.
+// n <= 0 removes the limit.
+func (r *PendingRequest) MaxResponseSize(n int64) *PendingRequest {
+	r.maxResp = n
+	return r
 }
 
 // NewPendingRequest initializes a new PendingRequest.
@@ -370,7 +387,20 @@ func (r *PendingRequest) Send(method, targetURL string, body ...any) (*Response,
 			break
 		}
 
-		respBody, readErr := io.ReadAll(httpResp.Body)
+		limit := r.maxResp
+		if limit == 0 {
+			limit = DefaultMaxResponseSize
+		}
+		var respBody []byte
+		var readErr error
+		if limit > 0 {
+			respBody, readErr = io.ReadAll(io.LimitReader(httpResp.Body, limit+1))
+			if readErr == nil && int64(len(respBody)) > limit {
+				respBody, readErr = nil, ErrResponseTooLarge
+			}
+		} else {
+			respBody, readErr = io.ReadAll(httpResp.Body)
+		}
 		httpResp.Body.Close()
 
 		if readErr != nil {

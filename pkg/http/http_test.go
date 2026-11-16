@@ -2,9 +2,11 @@ package glhttp_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -290,5 +292,20 @@ func TestHttpClient_TimeoutContext(t *testing.T) {
 	_, err = client.WithContext(ctx).Get(server.URL)
 	if err == nil {
 		t.Fatal("expected request to fail with cancelled context")
+	}
+}
+
+func TestResponseSizeLimit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(strings.Repeat("x", 2048)))
+	}))
+	defer srv.Close()
+	c := glhttp.NewClient()
+	if _, err := c.Request().MaxResponseSize(1024).Get(srv.URL); !errors.Is(err, glhttp.ErrResponseTooLarge) {
+		t.Fatalf("oversized response: %v", err)
+	}
+	resp, err := c.Request().MaxResponseSize(4096).Get(srv.URL)
+	if err != nil || len(resp.Body()) != 2048 {
+		t.Fatalf("within limit: %v", err)
 	}
 }
