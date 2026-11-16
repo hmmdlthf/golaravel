@@ -20,6 +20,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 
 	"github.com/golaravel/golaravel/pkg/database"
 	"github.com/golaravel/golaravel/pkg/redis"
@@ -50,6 +51,15 @@ func sqlBackends(t *testing.T) []sqlBackend {
 	sqlite.SetMaxOpenConns(1)
 	t.Cleanup(func() { sqlite.Close() })
 	out := []sqlBackend{{"sqlite", sqlite, database.SQLite}}
+
+	// modernc.org/sqlite (pure Go, no cgo) registers as "sqlite".
+	pure, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "it-modernc.db")+"?_pragma=busy_timeout(5000)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pure.SetMaxOpenConns(1)
+	t.Cleanup(func() { pure.Close() })
+	out = append(out, sqlBackend{"sqlite-modernc", pure, database.SQLite})
 
 	for _, c := range []struct {
 		name, env, driver string

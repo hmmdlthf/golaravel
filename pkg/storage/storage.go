@@ -17,8 +17,17 @@ type DiskManager struct {
 	defaultDisk string
 }
 
-// Global default disk manager
-var globalDiskManager = NewDiskManager()
+// The global disk manager is built on first use, so importing the package
+// reads no environment and creates no directories.
+var (
+	globalDiskOnce    sync.Once
+	globalDiskManager *DiskManager
+)
+
+func defaultDiskManager() *DiskManager {
+	globalDiskOnce.Do(func() { globalDiskManager = NewDiskManager() })
+	return globalDiskManager
+}
 
 // NewDiskManager creates and initializes a disk manager.
 func NewDiskManager() *DiskManager {
@@ -93,7 +102,7 @@ func (dm *DiskManager) configureS3FromEnv() {
 // Disk retrieves a configured storage disk by name.
 // If name is omitted, returns the default configured disk.
 func Disk(name ...string) Driver {
-	return globalDiskManager.Disk(name...)
+	return defaultDiskManager().Disk(name...)
 }
 
 // Disk retrieves a disk from the manager.
@@ -119,7 +128,7 @@ func (dm *DiskManager) Disk(name ...string) Driver {
 
 // RegisterDisk registers a custom storage disk driver.
 func RegisterDisk(name string, d Driver) {
-	globalDiskManager.RegisterDisk(name, d)
+	defaultDiskManager().RegisterDisk(name, d)
 }
 
 // RegisterDisk registers a named disk.
@@ -131,7 +140,7 @@ func (dm *DiskManager) RegisterDisk(name string, d Driver) {
 
 // SetDefaultDisk changes the default disk name.
 func SetDefaultDisk(name string) {
-	globalDiskManager.SetDefaultDisk(name)
+	defaultDiskManager().SetDefaultDisk(name)
 }
 
 // SetDefaultDisk changes the default disk name.

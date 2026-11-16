@@ -17,6 +17,7 @@ func StartSession(manager ...*Manager) context.HandlerFunc {
 
 	return func(c *context.Context) error {
 		sess := mgr.Start(c)
+		c.Set(contextManagerKey, mgr)
 
 		// Share CSRF token into context for Templ views / forms
 		c.Set("csrf_token", sess.Token())

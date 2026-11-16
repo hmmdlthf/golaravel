@@ -183,5 +183,15 @@ mgr := session.NewManager(session.Config{
 mgr.StartGC(ctx, 10*time.Minute) // removes idle sessions (memory, file and SQL drivers)
 ```
 
+`Migrate` also adds a nullable, indexed `user_id` column to `sessions` tables made by
+older versions. The `Manager` fills it from the logged-in user (`session.AuthUserKey`, set by
+`auth.Login`), so `mgr.DestroyUserSessions(userID, exceptIDs...)` can end a user's sessions.
+The Redis driver keeps a per-user index for the same purpose.
+
+**The default manager.** `session.StartSession()` without a manager uses
+`session.DefaultManager()`. It is built the first time it is used, with its key read from
+`APP_KEY`, so importing the package logs nothing. Call `session.SetDefaultManager(mgr)` to
+replace it.
+
 The drivers take the lifetime from the `Manager`. A SQL session that has been idle longer than
 the lifetime is treated as missing on read, and `GC` deletes it.

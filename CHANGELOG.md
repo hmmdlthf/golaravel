@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.17.0] - 2026-11-17
+
+### Added
+- **Session login (`pkg/auth`)**: `auth.Login`, `auth.Logout`, `auth.LogoutOtherDevices`, `auth.SessionGuard` / `SessionGuardFunc` and `auth.UserProviderFunc`, so server-rendered sites can log in with the session cookie instead of a JWT. Login regenerates the session id and deletes the old one, and renews the CSRF token. Logout destroys the session and issues a new CSRF token.
+- **Sessions linked to users (`pkg/session`)**: the SQL driver has a nullable, indexed `user_id` column (`Migrate` adds it to existing tables). `Manager.DestroyUserSessions(userID, except...)` ends a user's sessions on the memory, file, SQL and Redis drivers. The cookie driver returns `ErrUserSessionsUnsupported`. New `Manager.Regenerate`, `Manager.Invalidate`, `session.ManagerFrom(c)` and the `UserSessionDriver` interface.
+- **`auth.SQLResetTokenStore`**: password reset tokens in a `password_reset_tokens` table (SQLite, including `modernc.org/sqlite`, MySQL and Postgres), with `Migrate` and `PruneExpired`.
+
+### Changed
+- **No warnings at import**: the default session manager and disk manager are built on first use instead of at package load. The default session manager takes its key from `APP_KEY`. The "no SecretKey" warning is logged only when a manager is built without a key, and the storage "no signing secret" warning only when a URL is first signed with the random key.
+
 ## [v1.16.0] - 2026-11-16
 
 ### Security

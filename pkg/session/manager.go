@@ -3,6 +3,8 @@ package session
 import (
 	"log/slog"
 	"net/http"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/golaravel/golaravel/pkg/context"
@@ -104,12 +106,12 @@ func NewManager(cfg ...Config) *Manager {
 	c.HttpOnly = !c.AllowScriptAccess
 	_, cookieDriver := c.Driver.(*CookieDriver)
 	c.Encrypt = !c.DisableEncryption || cookieDriver
-	if c.SecretKey == "" || c.SecretKey == insecureDefaultSecret {
-		if c.SecretKey == insecureDefaultSecret {
-			slog.Warn("session: the built-in example SecretKey is public; using a random per-process key instead. Set Config.SecretKey.")
-		} else {
-			slog.Warn("session: no SecretKey configured; using a random per-process key (sessions end on restart). Set Config.SecretKey.")
-		}
+	if c.SecretKey == insecureDefaultSecret {
+		slog.Warn("session: the built-in example SecretKey is public; using a random per-process key instead. Set Config.SecretKey.")
+		c.SecretKey = ""
+	}
+	if c.SecretKey == "" {
+		slog.Warn("session: no SecretKey configured; using a random per-process key (sessions end on restart). Set Config.SecretKey or APP_KEY.")
 		c.SecretKey = generateRandomString(64)
 	}
 
@@ -199,7 +201,7 @@ func (m *Manager) Save(c *context.Context, s *Session) error {
 	}
 
 	// Server Driver: write to storage engine and set session ID cookie
-	if err := m.driver.Write(s.ID(), data); err != nil {
+	if err := m.write(s, data); err != nil {
 		return err
 	}
 
@@ -239,15 +241,28 @@ func FromContext(c *context.Context) *Session {
 	return nil
 }
 
-// Global default manager
-var globalManager = NewManager()
+// The global default manager is built on first use (not at package load),
+// with its key taken from APP_KEY, so apps that configure their own manager
+// never see a "no SecretKey" warning.
+var (
+	globalMu      sync.Mutex
+	globalManager *Manager
+)
 
 // SetDefaultManager sets the application-wide session manager.
 func SetDefaultManager(mgr *Manager) {
+	globalMu.Lock()
+	defer globalMu.Unlock()
 	globalManager = mgr
 }
 
-// DefaultManager returns the global session manager.
+// DefaultManager returns the global session manager, building one from
+// DefaultConfig and APP_KEY the first time it is needed.
 func DefaultManager() *Manager {
+	globalMu.Lock()
+	defer globalMu.Unlock()
+	if globalManager == nil {
+		globalManager = NewManager(Config{SecretKey: os.Getenv("APP_KEY")})
+	}
 	return globalManager
 }

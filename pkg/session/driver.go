@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+// nowFunc is time.Now, replaceable in tests.
+var nowFunc = time.Now
+
 var (
 	ErrSessionNotFound = errors.New("session: session not found")
 )
@@ -25,6 +28,7 @@ type Driver interface {
 
 type memorySessionItem struct {
 	data      []byte
+	userID    string
 	updatedAt time.Time
 }
 
@@ -56,7 +60,8 @@ func (d *MemoryDriver) Write(id string, data []byte) error {
 	defer d.mu.Unlock()
 	d.sessions[id] = memorySessionItem{
 		data:      data,
-		updatedAt: time.Now(),
+		userID:    d.sessions[id].userID,
+		updatedAt: nowFunc(),
 	}
 	return nil
 }
