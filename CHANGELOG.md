@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Validation rule engine (`pkg/validation`)**: `validation.Make(data, validation.Rules{...})` with Laravel-style rule strings.
+  - **Rules:** presence (`required*`, `sometimes`, `nullable`, `prohibited*`, `accepted`, ...), types and formats (`string`, `integer`, `numeric`, `decimal`, `boolean`, `array`, `json`, `email`, `url`, `uuid`, `ip`, `alpha*`, `regex`, dates, `timezone`), sizes that follow the field type, comparisons (`confirmed`, `same`, `gt`/`lt` against numbers or fields, `in`, `distinct`, `before`/`after`), files (`file`, `image` without SVG, `mimes` / `mimetypes` checked against the sniffed content, `extensions`) and database `unique` / `exists`.
+  - **Fields:** nested and wildcard fields (`items.*.sku`), `bail`, custom `Rule` values / `RuleFunc`.
+  - **Messages:** custom messages (`field.rule`), attribute names, and translation keys (`validation.<rule>`).
+  - **Output:** `Validated()` returns only the fields listed in the rules.
+  - **Database rules:** `SQLChecker(db, dialect)` and `SetDefaultDB` answer `unique` / `exists`, with table and column names checked.
+  - **Form requests:** they can implement `Rules()`, `Messages()` and `Attributes()`, and `ValidateAndRespond` merges their errors with `Validate(v)`. `Validator.Check(field, value, rules)` uses rule strings inside `Validate`.
+  - **Handlers:** `ValidateRequest(c, rules)`, `RequestData(c)` (JSON, urlencoded and multipart input) and `Validated(c)`.
+  - **Scaffold:** the `lang/<locale>/validation.json` that artisan generates has per-type `min` / `max` messages.
+
+### Changed
+- `ValidateAndRespond` accepts an empty JSON body (rules decide what is required) and reads form input as well as JSON. The existing fluent methods are unchanged.
+
 ## [v1.8.0] - 2026-11-16
 
 ### Added
