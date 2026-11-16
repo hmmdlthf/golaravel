@@ -284,12 +284,12 @@ func ExtractW3C(header string) (traceID, parentID string, sampled bool, err erro
 	}
 
 	traceID = parts[1]
-	if len(traceID) != 32 {
+	if len(traceID) != 32 || !isLowerHex(traceID) || strings.Trim(traceID, "0") == "" {
 		return "", "", false, errors.New("telemetry: trace_id must be 32 hex chars")
 	}
 
 	parentID = parts[2]
-	if len(parentID) != 16 {
+	if len(parentID) != 16 || !isLowerHex(parentID) || strings.Trim(parentID, "0") == "" {
 		return "", "", false, errors.New("telemetry: parent_id must be 16 hex chars")
 	}
 
@@ -436,4 +436,16 @@ func randomHex(byteLen int) string {
 	b := make([]byte, byteLen)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// isLowerHex reports whether s is lowercase hex, as W3C trace context
+// requires; anything else is rejected rather than propagated.
+func isLowerHex(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
 }
