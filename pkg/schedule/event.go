@@ -1,19 +1,19 @@
 package schedule
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"os/exec"
+	"runtime/debug"
 	"sync"
 	"time"
 
-	"log/slog"
 	"github.com/golaravel/golaravel/pkg/cache"
 	"github.com/golaravel/golaravel/pkg/queue"
+	"log/slog"
 )
 
 // ScheduledTask is an alias for Event for backward compatibility.
@@ -514,7 +514,15 @@ func (e *Event) Next(t time.Time) time.Time {
 }
 
 // Run executes the scheduled event with full locking, conditional tests, and hooks.
-func (e *Event) Run(ctx context.Context) error {
+func (e *Event) Run(ctx context.Context) (err error) {
+	// A panicking task must not take the whole application down (tasks
+	// run in the scheduler goroutine, or their own with RunInBackground).
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("schedule: task %q panicked: %v", e.GetName(), r)
+			slog.Error("Scheduled event panicked", "task", e.GetName(), "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
 	e.mu.Lock()
 	e.lastRun = time.Now()
 	withoutOverlapping := e.withoutOverlapping
@@ -550,6 +558,7 @@ func (e *Event) Run(ctx context.Context) error {
 	// Ensures only one cluster node executes this task during its minute window.
 	var serverLock *cache.AtomicLock
 	if onOneServer {
+		warnLocalLock()
 		minuteStamp := time.Now().UTC().Format("200601021504")
 		serverLockKey := fmt.Sprintf("schedule:server:%s:%s", lockKey, minuteStamp)
 		serverLock = cache.Lock(serverLockKey, 55*time.Second)
@@ -585,9 +594,9 @@ func (e *Event) Run(ctx context.Context) error {
 		runErr = action(ctx)
 	} else if cmdName != "" {
 		cmd := exec.CommandContext(ctx, cmdName, cmdArgs...)
-		var out bytes.Buffer
-		cmd.Stdout = &out
-		cmd.Stderr = &out
+		out := &tailBuffer{max: 64 << 10}
+		cmd.Stdout = out
+		cmd.Stderr = out
 		runErr = cmd.Run()
 		if runErr != nil && out.Len() > 0 {
 			runErr = fmt.Errorf("%w: %s", runErr, out.String())
@@ -653,3 +662,34 @@ func joinFields(items []string, sep string) string {
 	}
 	return res
 }
+
+var warnLocalLockOnce sync.Once
+
+// warnLocalLock: OnOneServer locks through the default cache; with the
+// in-memory store every server has its own lock, so the task still runs
+// on all of them.
+func warnLocalLock() {
+	if _, local := cache.DefaultStore().(*cache.MemoryStore); local {
+		warnLocalLockOnce.Do(func() {
+			slog.Warn("schedule: OnOneServer uses the in-memory cache, so it only prevents duplicates within this process. Set a shared store with cache.SetDefaultStore (cache.NewRedisStore / cache.NewSQLStore).")
+		})
+	}
+}
+
+// tailBuffer keeps the last max bytes written (command output for error
+// messages) instead of growing without bound.
+type tailBuffer struct {
+	buf []byte
+	max int
+}
+
+func (t *tailBuffer) Write(p []byte) (int, error) {
+	t.buf = append(t.buf, p...)
+	if over := len(t.buf) - t.max; over > 0 {
+		t.buf = append(t.buf[:0], t.buf[over:]...)
+	}
+	return len(p), nil
+}
+
+func (t *tailBuffer) Len() int       { return len(t.buf) }
+func (t *tailBuffer) String() string { return string(t.buf) }
