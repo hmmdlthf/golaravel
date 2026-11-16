@@ -188,7 +188,7 @@ app.Use(middleware.CORS(middleware.DefaultCORS()))
 // Double Submit Cookie CSRF verification
 app.Use(middleware.CSRF())
 
-// In-Memory Token Bucket Rate Limiting (e.g. 60 requests/minute per IP)
+// Sliding-window rate limiting per client IP (60 requests/minute)
 app.Use(ratelimit.ThrottleMax(60, time.Minute)) // see docs/rate-limiting-and-throttling.md
 ```
 
