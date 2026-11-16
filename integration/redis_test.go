@@ -2,6 +2,8 @@ package integration
 
 import (
 	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -84,13 +86,49 @@ func TestQueueRedisDriver(t *testing.T) {
 	t.Fatal("delayed job never became available")
 }
 
+func TestQueueRedisDelayedCustomQueue(t *testing.T) {
+	redisClient(t)
+	d, err := queue.NewRedisDriver(queue.RedisConfig{Addr: envRedis(), Prefix: "it:" + suffix() + ":queue:"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if err := d.Later("emails", 100*time.Millisecond, &queue.JobPayload{ID: "mail-1", Type: "T"}); err != nil {
+		t.Fatal(err)
+	}
+	if j, err := d.Pop("emails", 3*time.Second); err != nil || j == nil || j.ID != "mail-1" {
+		t.Fatalf("delayed job on a custom queue: %+v %v", j, err)
+	}
+}
+
 func TestRateLimitRedisStore(t *testing.T) {
 	redisClient(t)
 	s, err := ratelimit.NewRedisStore(ratelimit.RedisConfig{Addr: envRedis(), Prefix: "it:" + suffix() + ":rl:", Timeout: 2 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Close()
 	testRateLimitStore(t, s)
+
+	// A burst of concurrent hits must never get past the limit.
+	var wg sync.WaitGroup
+	var allowed int32
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if r, err := s.Hit("burst", 10, time.Minute); err == nil && r.Allowed {
+				atomic.AddInt32(&allowed, 1)
+			}
+		}()
+	}
+	wg.Wait()
+	if allowed != 10 {
+		t.Fatalf("allowed %d of 50 concurrent hits, want exactly 10", allowed)
+	}
+	if err := s.Clear(); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
 }
 
 func envRedis() string { return os.Getenv("GOLARAVEL_TEST_REDIS_ADDR") }

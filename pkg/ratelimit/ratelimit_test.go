@@ -374,6 +374,53 @@ func startMockRedisLimiterServer(t *testing.T) (string, func()) {
 						writer.WriteString(":1\r\n")
 					case "EXPIRE":
 						writer.WriteString(":1\r\n")
+					case "EVAL":
+						// The Hit script: trim, count, add when under the limit.
+						key := args[3]
+						cutoff, _ := strconv.ParseInt(args[4], 10, 64)
+						now, _ := strconv.ParseInt(args[5], 10, 64)
+						limit, _ := strconv.Atoi(args[6])
+						zs := zsets[key]
+						if zs == nil {
+							zs = map[string]int64{}
+							zsets[key] = zs
+						}
+						for m, sc := range zs {
+							if sc <= cutoff {
+								delete(zs, m)
+							}
+						}
+						oldest := ""
+						var minScore int64 = 1<<63 - 1
+						for _, sc := range zs {
+							if sc < minScore {
+								minScore = sc
+								oldest = strconv.FormatInt(sc, 10)
+							}
+						}
+						count := len(zs)
+						allowed := 0
+						if count < limit {
+							zs[args[7]] = now
+							count++
+							allowed = 1
+						}
+						writer.WriteString(fmt.Sprintf("*3\r\n:%d\r\n:%d\r\n$%d\r\n%s\r\n", allowed, count, len(oldest), oldest))
+					case "ZREM":
+						n := 0
+						if zs := zsets[args[1]]; zs != nil {
+							if _, ok := zs[args[2]]; ok {
+								delete(zs, args[2])
+								n = 1
+							}
+						}
+						writer.WriteString(fmt.Sprintf(":%d\r\n", n))
+					case "SCAN":
+						writer.WriteString("*2\r\n$1\r\n0\r\n")
+						writer.WriteString(fmt.Sprintf("*%d\r\n", len(zsets)))
+						for k := range zsets {
+							writer.WriteString(fmt.Sprintf("$%d\r\n%s\r\n", len(k), k))
+						}
 					case "DEL":
 						for _, k := range args[1:] {
 							delete(zsets, k)
@@ -459,4 +506,41 @@ func TestRedisStore_SlidingWindow(t *testing.T) {
 	if err := redisStore.Clear(); err != nil {
 		t.Fatalf("redis Clear failed: %v", err)
 	}
+}
+
+func TestRedisStore_ConcurrentHitsNeverExceedLimit(t *testing.T) {
+	addr, cleanup := startMockRedisLimiterServer(t)
+	defer cleanup()
+	store, err := ratelimit.NewRedisStore(ratelimit.RedisConfig{Addr: addr, Prefix: "test:rl:", Timeout: 2 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if got := ConcurrentAllowed(t, store, 50, 10); got != 10 {
+		t.Fatalf("allowed %d of 50 concurrent hits, want exactly 10", got)
+	}
+}
+
+// ConcurrentAllowed fires n concurrent hits on one key with the given
+// limit and returns how many were allowed.
+func ConcurrentAllowed(t *testing.T, s ratelimit.Store, n, limit int) int {
+	t.Helper()
+	var wg sync.WaitGroup
+	var allowed int32
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r, err := s.Hit("burst", limit, time.Minute)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if r.Allowed {
+				atomic.AddInt32(&allowed, 1)
+			}
+		}()
+	}
+	wg.Wait()
+	return int(atomic.LoadInt32(&allowed))
 }

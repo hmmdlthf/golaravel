@@ -1,16 +1,14 @@
 package queue
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/goccy/go-json"
+
+	"github.com/golaravel/golaravel/pkg/redis"
 )
 
 // RedisConfig holds connection settings for the Redis queue backend.
@@ -25,7 +23,8 @@ type RedisConfig struct {
 // RedisDriver implements Driver backed by Redis using pure Go RESP protocol.
 type RedisDriver struct {
 	cfg      RedisConfig
-	pool     *redisPool
+	client   *redis.Client
+	queues   sync.Map // queue names that have delayed jobs
 	prefix   string
 	stopChan chan struct{}
 }
@@ -42,18 +41,14 @@ func NewRedisDriver(cfg RedisConfig) (*RedisDriver, error) {
 		cfg.Timeout = 5 * time.Second
 	}
 
-	pool := newRedisPool(cfg, 10)
-
-	// Test connection
-	conn, err := pool.get()
+	client, err := redis.New(redis.Config{Addr: cfg.Addr, Password: cfg.Password, DB: cfg.DB, Timeout: cfg.Timeout, PoolSize: 10})
 	if err != nil {
 		return nil, fmt.Errorf("queue: failed to connect to redis at %s: %w", cfg.Addr, err)
 	}
-	pool.put(conn)
 
 	d := &RedisDriver{
 		cfg:      cfg,
-		pool:     pool,
+		client:   client,
 		prefix:   cfg.Prefix,
 		stopChan: make(chan struct{}),
 	}
@@ -73,13 +68,8 @@ func (d *RedisDriver) Push(queue string, payload *JobPayload) error {
 	}
 
 	key := d.prefix + queue
-	conn, err := d.pool.get()
-	if err != nil {
-		return err
-	}
-	defer d.pool.put(conn)
 
-	_, err = conn.cmd("LPUSH", key, string(data))
+	_, err = d.client.Do("LPUSH", key, string(data))
 	return err
 }
 
@@ -95,26 +85,16 @@ func (d *RedisDriver) Later(queue string, delay time.Duration, payload *JobPaylo
 	}
 
 	key := d.prefix + queue + ":delayed"
+	d.queues.Store(queue, struct{}{})
 	score := strconv.FormatInt(available.UnixNano(), 10)
 
-	conn, err := d.pool.get()
-	if err != nil {
-		return err
-	}
-	defer d.pool.put(conn)
-
-	_, err = conn.cmd("ZADD", key, score, string(data))
+	_, err = d.client.Do("ZADD", key, score, string(data))
 	return err
 }
 
 // Pop pops the next ready job from Redis via RPOP or BRPOP.
 func (d *RedisDriver) Pop(queue string, timeout time.Duration) (*JobPayload, error) {
 	key := d.prefix + queue
-	conn, err := d.pool.get()
-	if err != nil {
-		return nil, err
-	}
-	defer d.pool.put(conn)
 
 	var raw string
 	if timeout > 0 {
@@ -123,7 +103,7 @@ func (d *RedisDriver) Pop(queue string, timeout time.Duration) (*JobPayload, err
 			secs = 1
 		}
 		// BRPOP returns [key, element]
-		res, err := conn.cmd("BRPOP", key, strconv.Itoa(secs))
+		res, err := d.client.DoTimeout(time.Duration(secs)*time.Second, "BRPOP", key, strconv.Itoa(secs))
 		if err != nil {
 			return nil, err
 		}
@@ -133,7 +113,7 @@ func (d *RedisDriver) Pop(queue string, timeout time.Duration) (*JobPayload, err
 		}
 		raw = fmt.Sprint(arr[1])
 	} else {
-		res, err := conn.cmd("RPOP", key)
+		res, err := d.client.Do("RPOP", key)
 		if err != nil {
 			return nil, err
 		}
@@ -158,13 +138,8 @@ func (d *RedisDriver) Pop(queue string, timeout time.Duration) (*JobPayload, err
 // Size returns the count of ready jobs in queue via LLEN.
 func (d *RedisDriver) Size(queue string) (int64, error) {
 	key := d.prefix + queue
-	conn, err := d.pool.get()
-	if err != nil {
-		return 0, err
-	}
-	defer d.pool.put(conn)
 
-	res, err := conn.cmd("LLEN", key)
+	res, err := d.client.Do("LLEN", key)
 	if err != nil {
 		return 0, err
 	}
@@ -176,14 +151,9 @@ func (d *RedisDriver) Size(queue string) (int64, error) {
 
 // Clear purges the queue and delayed set via DEL.
 func (d *RedisDriver) Clear(queue string) error {
-	conn, err := d.pool.get()
-	if err != nil {
-		return err
-	}
-	defer d.pool.put(conn)
 
-	_, _ = conn.cmd("DEL", d.prefix+queue)
-	_, _ = conn.cmd("DEL", d.prefix+queue+":delayed")
+	_, _ = d.client.Do("DEL", d.prefix+queue)
+	_, _ = d.client.Do("DEL", d.prefix+queue+":delayed")
 	return nil
 }
 
@@ -194,7 +164,7 @@ func (d *RedisDriver) Close() {
 	default:
 		close(d.stopChan)
 	}
-	d.pool.close()
+	_ = d.client.Close()
 }
 
 func (d *RedisDriver) processDelayed() {
@@ -206,44 +176,47 @@ func (d *RedisDriver) processDelayed() {
 		case <-d.stopChan:
 			return
 		case now := <-ticker.C:
-			conn, err := d.pool.get()
-			if err != nil {
+			d.moveDueJobs(now)
+		}
+	}
+}
+
+// moveDueJobs moves delayed jobs whose time has come onto their ready
+// queue: the standard queues plus every queue Later was called for.
+func (d *RedisDriver) moveDueJobs(now time.Time) {
+	names := map[string]struct{}{"default": {}, "high": {}, "low": {}}
+	d.queues.Range(func(k, _ any) bool {
+		names[k.(string)] = struct{}{}
+		return true
+	})
+	scoreLimit := strconv.FormatInt(now.UnixNano(), 10)
+	for qName := range names {
+		delayedKey := d.prefix + qName + ":delayed"
+		destKey := d.prefix + qName
+
+		res, err := d.client.Do("ZRANGEBYSCORE", delayedKey, "-inf", scoreLimit, "LIMIT", "0", "50")
+		if err != nil {
+			continue
+		}
+		arr, ok := res.([]any)
+		if !ok {
+			continue
+		}
+		for _, item := range arr {
+			itemStr := fmt.Sprint(item)
+			// Only the worker whose ZREM removed the job pushes it, so two
+			// workers sharing Redis never run it twice.
+			if n, err := redis.Int(d.client.Do("ZREM", delayedKey, itemStr)); err != nil || n != 1 {
 				continue
 			}
-
-			// Poll delayed items ready to run
-			scoreLimit := strconv.FormatInt(now.UnixNano(), 10)
-			// Check standard queue names
-			for _, qName := range []string{"default", "high", "low"} {
-				delayedKey := d.prefix + qName + ":delayed"
-				destKey := d.prefix + qName
-
-				res, err := conn.cmd("ZRANGEBYSCORE", delayedKey, "-inf", scoreLimit, "LIMIT", "0", "50")
-				if err != nil {
-					continue
-				}
-
-				arr, ok := res.([]any)
-				if !ok || len(arr) == 0 {
-					continue
-				}
-
-				for _, item := range arr {
-					itemStr := fmt.Sprint(item)
-					// Remove from sorted set and push to ready queue
-					_, _ = conn.cmd("ZREM", delayedKey, itemStr)
-					_, _ = conn.cmd("LPUSH", destKey, itemStr)
-				}
-			}
-
-			d.pool.put(conn)
+			_, _ = d.client.Do("LPUSH", destKey, itemStr)
 		}
 	}
 }
 
 // RedisFailedJobStore stores Dead-Letter Queue items in a Redis Hash.
 type RedisFailedJobStore struct {
-	pool   *redisPool
+	client *redis.Client
 	prefix string
 }
 
@@ -253,35 +226,25 @@ func NewRedisFailedJobStore(cfg RedisConfig) *RedisFailedJobStore {
 		cfg.Prefix = "golaravel:queue:"
 	}
 	return &RedisFailedJobStore{
-		pool:   newRedisPool(cfg, 5),
+		client: redis.Open(redis.Config{Addr: cfg.Addr, Password: cfg.Password, DB: cfg.DB, Timeout: cfg.Timeout, PoolSize: 5}),
 		prefix: cfg.Prefix + "failed",
 	}
 }
 
 func (s *RedisFailedJobStore) Log(job *FailedJob) error {
-	conn, err := s.pool.get()
-	if err != nil {
-		return err
-	}
-	defer s.pool.put(conn)
 
 	data, err := json.Marshal(job)
 	if err != nil {
 		return err
 	}
 
-	_, err = conn.cmd("HSET", s.prefix, job.ID, string(data))
+	_, err = s.client.Do("HSET", s.prefix, job.ID, string(data))
 	return err
 }
 
 func (s *RedisFailedJobStore) All(limit, offset int) ([]*FailedJob, error) {
-	conn, err := s.pool.get()
-	if err != nil {
-		return nil, err
-	}
-	defer s.pool.put(conn)
 
-	res, err := conn.cmd("HGETALL", s.prefix)
+	res, err := s.client.Do("HGETALL", s.prefix)
 	if err != nil {
 		return nil, err
 	}
@@ -312,13 +275,8 @@ func (s *RedisFailedJobStore) All(limit, offset int) ([]*FailedJob, error) {
 }
 
 func (s *RedisFailedJobStore) Find(id string) (*FailedJob, error) {
-	conn, err := s.pool.get()
-	if err != nil {
-		return nil, err
-	}
-	defer s.pool.put(conn)
 
-	res, err := conn.cmd("HGET", s.prefix, id)
+	res, err := s.client.Do("HGET", s.prefix, id)
 	if err != nil || res == nil {
 		return nil, ErrJobNotFound
 	}
@@ -331,35 +289,17 @@ func (s *RedisFailedJobStore) Find(id string) (*FailedJob, error) {
 }
 
 func (s *RedisFailedJobStore) Delete(id string) error {
-	conn, err := s.pool.get()
-	if err != nil {
-		return err
-	}
-	defer s.pool.put(conn)
-
-	_, err = conn.cmd("HDEL", s.prefix, id)
+	_, err := s.client.Do("HDEL", s.prefix, id)
 	return err
 }
 
 func (s *RedisFailedJobStore) Flush() error {
-	conn, err := s.pool.get()
-	if err != nil {
-		return err
-	}
-	defer s.pool.put(conn)
-
-	_, err = conn.cmd("DEL", s.prefix)
+	_, err := s.client.Do("DEL", s.prefix)
 	return err
 }
 
 func (s *RedisFailedJobStore) Count() (int64, error) {
-	conn, err := s.pool.get()
-	if err != nil {
-		return 0, err
-	}
-	defer s.pool.put(conn)
-
-	res, err := conn.cmd("HLEN", s.prefix)
+	res, err := s.client.Do("HLEN", s.prefix)
 	if err != nil {
 		return 0, err
 	}
@@ -367,154 +307,4 @@ func (s *RedisFailedJobStore) Count() (int64, error) {
 		return n, nil
 	}
 	return 0, nil
-}
-
-// --- Zero-Dependency RESP Protocol Client ---
-
-type redisConn struct {
-	conn   net.Conn
-	reader *bufio.Reader
-	writer *bufio.Writer
-}
-
-func dialRedis(cfg RedisConfig) (*redisConn, error) {
-	c, err := net.DialTimeout("tcp", cfg.Addr, cfg.Timeout)
-	if err != nil {
-		return nil, err
-	}
-
-	rc := &redisConn{
-		conn:   c,
-		reader: bufio.NewReader(c),
-		writer: bufio.NewWriter(c),
-	}
-
-	// AUTH if required
-	if cfg.Password != "" {
-		if _, err := rc.cmd("AUTH", cfg.Password); err != nil {
-			c.Close()
-			return nil, err
-		}
-	}
-
-	// SELECT DB if != 0
-	if cfg.DB != 0 {
-		if _, err := rc.cmd("SELECT", strconv.Itoa(cfg.DB)); err != nil {
-			c.Close()
-			return nil, err
-		}
-	}
-
-	return rc, nil
-}
-
-func (rc *redisConn) cmd(args ...string) (any, error) {
-	// Write RESP Array: *<len>\r\n$<len>\r\n<arg>\r\n...
-	fmt.Fprintf(rc.writer, "*%d\r\n", len(args))
-	for _, arg := range args {
-		fmt.Fprintf(rc.writer, "$%d\r\n%s\r\n", len(arg), arg)
-	}
-	if err := rc.writer.Flush(); err != nil {
-		return nil, err
-	}
-
-	return rc.readReply()
-}
-
-func (rc *redisConn) readReply() (any, error) {
-	line, err := rc.reader.ReadString('\n')
-	if err != nil {
-		return nil, err
-	}
-	line = strings.TrimRight(line, "\r\n")
-	if len(line) == 0 {
-		return nil, io.EOF
-	}
-
-	switch line[0] {
-	case '+': // Simple string
-		return line[1:], nil
-	case '-': // Error
-		return nil, fmt.Errorf("redis: %s", line[1:])
-	case ':': // Integer
-		return strconv.ParseInt(line[1:], 10, 64)
-	case '$': // Bulk string
-		length, err := strconv.Atoi(line[1:])
-		if err != nil {
-			return nil, err
-		}
-		if length == -1 {
-			return nil, nil // Null bulk string
-		}
-		buf := make([]byte, length+2)
-		if _, err := io.ReadFull(rc.reader, buf); err != nil {
-			return nil, err
-		}
-		return string(buf[:length]), nil
-	case '*': // Array
-		count, err := strconv.Atoi(line[1:])
-		if err != nil {
-			return nil, err
-		}
-		if count == -1 {
-			return nil, nil // Null array
-		}
-		arr := make([]any, count)
-		for i := 0; i < count; i++ {
-			elem, err := rc.readReply()
-			if err != nil {
-				return nil, err
-			}
-			arr[i] = elem
-		}
-		return arr, nil
-	default:
-		return nil, fmt.Errorf("redis: unexpected response prefix '%c'", line[0])
-	}
-}
-
-type redisPool struct {
-	cfg   RedisConfig
-	conns chan *redisConn
-	mu    sync.Mutex
-}
-
-func newRedisPool(cfg RedisConfig, size int) *redisPool {
-	return &redisPool{
-		cfg:   cfg,
-		conns: make(chan *redisConn, size),
-	}
-}
-
-func (p *redisPool) get() (*redisConn, error) {
-	select {
-	case c := <-p.conns:
-		return c, nil
-	default:
-		return dialRedis(p.cfg)
-	}
-}
-
-func (p *redisPool) put(c *redisConn) {
-	if c == nil {
-		return
-	}
-	select {
-	case p.conns <- c:
-	default:
-		c.conn.Close()
-	}
-}
-
-func (p *redisPool) close() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for {
-		select {
-		case c := <-p.conns:
-			c.conn.Close()
-		default:
-			return
-		}
-	}
 }
