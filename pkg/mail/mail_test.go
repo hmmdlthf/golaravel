@@ -84,10 +84,10 @@ func TestMessage_FluentBuilderAndMIME(t *testing.T) {
 	if !strings.Contains(mimeStr, "multipart/alternative") {
 		t.Errorf("MIME should contain multipart/alternative body")
 	}
-	if !strings.Contains(mimeStr, "filename=\"invoice-1024.pdf\"") {
+	if !strings.Contains(mimeStr, "Content-Disposition: attachment; filename=invoice-1024.pdf") {
 		t.Errorf("MIME missing file attachment")
 	}
-	if !strings.Contains(mimeStr, "filename=\"receipt.txt\"") {
+	if !strings.Contains(mimeStr, "Content-Disposition: attachment; filename=receipt.txt") {
 		t.Errorf("MIME missing in-memory attachment")
 	}
 }

@@ -110,3 +110,17 @@ func TestRateLimiterUsesClientIP(t *testing.T) {
 		t.Fatalf("second request from the same client: %d", rec.Code)
 	}
 }
+
+func TestSecureHeadersOptions(t *testing.T) {
+	r := reqWithOrigin("")
+	r.Header.Set("X-Forwarded-Proto", "https")
+	h := run(t, r, SecureHeaders(SecureHeadersOptions{ContentSecurityPolicy: StrictCSP, FrameOptions: "DENY", HSTSMaxAge: 600, PermissionsPolicy: "camera=()"})).Header()
+	if h.Get("Content-Security-Policy") != StrictCSP || h.Get("X-Frame-Options") != "DENY" ||
+		h.Get("Strict-Transport-Security") != "max-age=600" || h.Get("Permissions-Policy") != "camera=()" {
+		t.Fatalf("options not applied: %v", h)
+	}
+	h = run(t, r, SecureHeaders(SecureHeadersOptions{ContentSecurityPolicy: StrictCSP, CSPReportOnly: true, HSTSMaxAge: -1})).Header()
+	if h.Get("Content-Security-Policy-Report-Only") != StrictCSP || h.Get("Content-Security-Policy") != "" || h.Get("Strict-Transport-Security") != "" {
+		t.Fatalf("report-only / HSTS off: %v", h)
+	}
+}

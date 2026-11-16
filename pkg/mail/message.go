@@ -10,6 +10,7 @@ import (
 	"mime"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -198,33 +199,62 @@ func (m *Message) AllRecipients() []string {
 func (m *Message) BuildMIME() ([]byte, error) {
 	var buf bytes.Buffer
 
-	// 1. Headers
-	fromHeader := m.FromAddress
-	if m.FromName != "" {
-		fromHeader = fmt.Sprintf("%s <%s>", m.FromName, m.FromAddress)
+	// 1. Headers. Every value is validated (no CR / LF, parsable addresses)
+	// and encoded, since names, addresses and subjects often come from
+	// user input.
+	fromHeader, err := formatAddress(m.FromAddress, m.FromName)
+	if err != nil {
+		return nil, err
 	}
 	buf.WriteString(fmt.Sprintf("From: %s\r\n", fromHeader))
 
 	if len(m.ToAddresses) > 0 {
-		buf.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(m.ToAddresses, ", ")))
+		to, err := formatAddressList(m.ToAddresses)
+		if err != nil {
+			return nil, err
+		}
+		buf.WriteString(fmt.Sprintf("To: %s\r\n", to))
 	}
 	if len(m.CcAddresses) > 0 {
-		buf.WriteString(fmt.Sprintf("Cc: %s\r\n", strings.Join(m.CcAddresses, ", ")))
+		cc, err := formatAddressList(m.CcAddresses)
+		if err != nil {
+			return nil, err
+		}
+		buf.WriteString(fmt.Sprintf("Cc: %s\r\n", cc))
+	}
+	if _, err := formatAddressList(m.BccAddresses); err != nil {
+		return nil, err
 	}
 	if m.ReplyToAddress != "" {
-		replyTo := m.ReplyToAddress
-		if m.ReplyToName != "" {
-			replyTo = fmt.Sprintf("%s <%s>", m.ReplyToName, m.ReplyToAddress)
+		replyTo, err := formatAddress(m.ReplyToAddress, m.ReplyToName)
+		if err != nil {
+			return nil, err
 		}
 		buf.WriteString(fmt.Sprintf("Reply-To: %s\r\n", replyTo))
 	}
 
-	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", m.SubjectLine))
+	subject, err := encodeHeaderText("Subject", m.SubjectLine)
+	if err != nil {
+		return nil, err
+	}
+	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
 	buf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
 	buf.WriteString(fmt.Sprintf("Message-ID: <%s@%s>\r\n", generateRandomID(), getHostname(m.FromAddress)))
 	buf.WriteString("MIME-Version: 1.0\r\n")
 
-	for k, v := range m.CustomHeaders {
+	keys := make([]string, 0, len(m.CustomHeaders))
+	for k := range m.CustomHeaders {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if !validHeaderName(k) {
+			return nil, fmt.Errorf("%w: header name %q", ErrInvalidHeader, k)
+		}
+		v, err := encodeHeaderText(k, m.CustomHeaders[k])
+		if err != nil {
+			return nil, err
+		}
 		buf.WriteString(fmt.Sprintf("%s: %s\r\n", k, v))
 	}
 
@@ -304,8 +334,22 @@ func (m *Message) BuildMIME() ([]byte, error) {
 	// Attachments
 	for _, att := range m.Attachments {
 		buf.WriteString(fmt.Sprintf("--%s\r\n", mixedBoundary))
-		buf.WriteString(fmt.Sprintf("Content-Type: %s; name=\"%s\"\r\n", att.ContentType, att.Filename))
-		buf.WriteString(fmt.Sprintf("Content-Disposition: attachment; filename=\"%s\"\r\n", att.Filename))
+		// Filenames often come from uploads: let mime quote / encode them
+		// (RFC 2231) instead of pasting them into the header.
+		if hasLineBreak(att.Filename) || hasLineBreak(att.ContentType) {
+			return nil, fmt.Errorf("%w: attachment %q", ErrInvalidHeader, att.Filename)
+		}
+		mediaType, _, err := mime.ParseMediaType(att.ContentType)
+		if err != nil {
+			mediaType = "application/octet-stream"
+		}
+		ctHeader := mime.FormatMediaType(mediaType, map[string]string{"name": att.Filename})
+		cdHeader := mime.FormatMediaType("attachment", map[string]string{"filename": att.Filename})
+		if ctHeader == "" || cdHeader == "" {
+			return nil, fmt.Errorf("%w: attachment %q", ErrInvalidHeader, att.Filename)
+		}
+		buf.WriteString(fmt.Sprintf("Content-Type: %s\r\n", ctHeader))
+		buf.WriteString(fmt.Sprintf("Content-Disposition: %s\r\n", cdHeader))
 		buf.WriteString("Content-Transfer-Encoding: base64\r\n\r\n")
 
 		encoded := base64.StdEncoding.EncodeToString(att.Data)
