@@ -27,6 +27,7 @@ var (
 type JWTHeader struct {
 	Alg string `json:"alg"`
 	Typ string `json:"typ"`
+	Kid string `json:"kid,omitempty"`
 }
 
 // JWTClaims represents standard registered claims.
@@ -50,6 +51,13 @@ type JWTManager struct {
 	audience string
 	leeway   time.Duration
 	revoked  func(claims *JWTClaims) bool
+
+	// Key-based (RS256 / ES256 / EdDSA) managers; see jwt_keys.go.
+	keyed     bool
+	alg       string
+	kid       string
+	signer    func(message []byte) ([]byte, error)
+	verifiers []jwtVerifier
 }
 
 // Issuer stamps iss on issued tokens and requires it on verified ones.
@@ -101,10 +109,15 @@ func NewJWTManager(secret string, ttl time.Duration) *JWTManager {
 
 // GenerateToken creates a signed JWT string for the given subject (user ID) and optional custom claims.
 func (m *JWTManager) GenerateToken(sub string, custom ...map[string]any) (string, error) {
-	if len(m.secret) == 0 {
+	header := JWTHeader{Alg: "HS256", Typ: "JWT"}
+	switch {
+	case m.keyed && m.signer == nil:
+		return "", ErrNoSigningKey
+	case m.keyed:
+		header = JWTHeader{Alg: m.alg, Typ: "JWT", Kid: m.kid}
+	case len(m.secret) == 0:
 		return "", ErrEmptySecret
 	}
-	header := JWTHeader{Alg: "HS256", Typ: "JWT"}
 	headerJSON, err := json.Marshal(header)
 	if err != nil {
 		return "", err
@@ -137,7 +150,14 @@ func (m *JWTManager) GenerateToken(sub string, custom ...map[string]any) (string
 	part2 := base64.RawURLEncoding.EncodeToString(claimsJSON)
 	message := part1 + "." + part2
 
-	sig := m.sign(message)
+	var sig []byte
+	if m.keyed {
+		if sig, err = m.signer([]byte(message)); err != nil {
+			return "", err
+		}
+	} else {
+		sig = m.sign(message)
+	}
 	part3 := base64.RawURLEncoding.EncodeToString(sig)
 
 	return message + "." + part3, nil
@@ -145,20 +165,22 @@ func (m *JWTManager) GenerateToken(sub string, custom ...map[string]any) (string
 
 // VerifyToken validates a JWT and returns the parsed claims.
 func (m *JWTManager) VerifyToken(tokenString string) (*JWTClaims, error) {
-	if len(m.secret) == 0 {
+	if !m.keyed && len(m.secret) == 0 {
 		return nil, ErrEmptySecret
 	}
 	parts := strings.Split(tokenString, ".")
 	if len(parts) != 3 {
 		return nil, ErrTokenInvalid
 	}
-	// Only HS256 is ever issued; refuse anything else (e.g. "none").
+	// The algorithm comes from the manager, never from the token: a secret
+	// manager accepts only HS256, a key-based one only its keys' algorithms
+	// (so "none", or HS256 with the public key as the secret, is refused).
 	headerBytes, err := base64.RawURLEncoding.DecodeString(parts[0])
 	if err != nil {
 		return nil, ErrTokenInvalid
 	}
 	var header JWTHeader
-	if err := json.Unmarshal(headerBytes, &header); err != nil || header.Alg != "HS256" {
+	if err := json.Unmarshal(headerBytes, &header); err != nil {
 		return nil, ErrTokenInvalid
 	}
 
@@ -167,14 +189,7 @@ func (m *JWTManager) VerifyToken(tokenString string) (*JWTClaims, error) {
 	if err != nil {
 		return nil, ErrTokenInvalid
 	}
-	valid := hmac.Equal(signWith(m.secret, message), actualSig)
-	for _, old := range m.previous {
-		if valid {
-			break
-		}
-		valid = hmac.Equal(signWith(old, message), actualSig)
-	}
-	if !valid {
+	if !m.signatureValid(header, message, actualSig) {
 		return nil, ErrTokenInvalid
 	}
 
@@ -207,6 +222,36 @@ func (m *JWTManager) VerifyToken(tokenString string) (*JWTClaims, error) {
 	}
 
 	return &claims, nil
+}
+
+func (m *JWTManager) signatureValid(header JWTHeader, message string, sig []byte) bool {
+	if !m.keyed {
+		if header.Alg != "HS256" {
+			return false
+		}
+		if hmac.Equal(signWith(m.secret, message), sig) {
+			return true
+		}
+		for _, old := range m.previous {
+			if hmac.Equal(signWith(old, message), sig) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, v := range m.verifiers {
+		if v.alg != header.Alg {
+			continue
+		}
+		// A token naming a key id is only checked against that key.
+		if header.Kid != "" && v.kid != "" && header.Kid != v.kid {
+			continue
+		}
+		if v.verify([]byte(message), sig) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *JWTManager) sign(message string) []byte {

@@ -209,3 +209,43 @@ broker := auth.NewPasswordResetBrokerWithStore(auth.CacheResetTokenStore(store),
 
 Only a hash of each token is stored, and cache keys use a hash of the email address. To use
 your own storage, implement `auth.ResetTokenStore`.
+
+## JWT with public/private keys (RS256, ES256, EdDSA)
+
+`auth.NewJWTManager(secret, ttl)` signs with a shared secret (HS256), so every service that checks
+tokens can also mint them. Sign with a private key instead, so other services only need the public
+key:
+
+```go
+priv, _ := auth.ParsePrivateKeyPEM(pemBytes)               // RSA (2048+), P-256 ECDSA or Ed25519
+jwt, err := auth.NewJWTManagerWithKey(priv, "2026-06", 24*time.Hour) // "2026-06" = key id (kid)
+jwt.Issuer("auth.example.com").Audience("api")
+
+// Publish the public keys for other services:
+app.GET("/.well-known/jwks.json", func(c *context.Context) error {
+    keys, _ := jwt.JWKS()
+    c.SetHeader("Content-Type", "application/json")
+    return c.String(200, "%s", keys)
+})
+```
+
+On a service that only verifies tokens:
+
+```go
+verifier, err := auth.NewJWTVerifierFromJWKS(jwksBytes) // or auth.NewJWTVerifier(publicKey, "2026-06")
+verifier.Issuer("auth.example.com").Audience("api")
+claims, err := verifier.VerifyToken(token) // GenerateToken returns ErrNoSigningKey here
+```
+
+Things to know:
+
+- **Choosing the algorithm:** it follows the key type: RSA → RS256, P-256 → ES256, Ed25519 → EdDSA.
+  RSA keys smaller than 2048 bits and other elliptic curves are refused.
+- **The token never chooses the algorithm.** A key-based manager rejects HS256 tokens (which blocks
+  the classic attack of using the public key as an HMAC secret), and a secret manager rejects
+  key-signed tokens.
+- **Rotation:** sign with the new key and keep accepting the old one with
+  `jwt.AcceptKey(oldPublicKey, "2026-01")` until its tokens expire. Tokens carry their key id
+  (`kid`), and a token is only checked against the key it names. `JWKS()` lists every accepted key.
+- The ES256 signature format is checked against the example in RFC 7515, so tokens work with other
+  JWT libraries.
