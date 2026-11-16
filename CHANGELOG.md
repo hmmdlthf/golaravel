@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.11.0] - 2026-11-16
 
 ### Added
 - **JWT with public/private keys (`pkg/auth`)**: `NewJWTManagerWithKey(privateKey, kid, ttl)` signs RS256 (RSA ≥ 2048), ES256 (P-256) or EdDSA (Ed25519) tokens, so other services verify them with only the public key.
