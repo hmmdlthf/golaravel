@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golaravel/golaravel/pkg/database"
@@ -123,7 +124,32 @@ func (b *SQLBackend) AddRaw(key string, val []byte, ttl time.Duration) (bool, er
 	return n == 1, err
 }
 
+// IncrBy retries a few times on deadlocks and serialization failures,
+// which concurrent increments of one key can cause (MySQL, Postgres) or on
+// SQLite's "database is locked".
 func (b *SQLBackend) IncrBy(key string, by int64) (int64, error) {
+	var err error
+	for attempt := 0; attempt < 5; attempt++ {
+		var n int64
+		if n, err = b.incrOnce(key, by); err == nil || !retryable(err) {
+			return n, err
+		}
+		time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+	}
+	return 0, err
+}
+
+func retryable(err error) bool {
+	msg := strings.ToLower(err.Error())
+	for _, s := range []string{"deadlock", "40001", "40p01", "could not serialize", "database is locked", "lock wait timeout"} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
+}
+
+func (b *SQLBackend) incrOnce(key string, by int64) (int64, error) {
 	ctx, cancel := b.ctx()
 	defer cancel()
 	tx, err := b.db.BeginTx(ctx, nil)
@@ -131,6 +157,13 @@ func (b *SQLBackend) IncrBy(key string, by int64) (int64, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
+	// Make sure the row exists before locking it: SELECT ... FOR UPDATE
+	// locks nothing when the row is missing, so two first increments could
+	// both read 0 and one update would be lost (seen on Postgres). A
+	// concurrent insert of the same key waits for this transaction.
+	if _, err := tx.ExecContext(ctx, b.d.InsertIgnore(b.table, "cache_key", "value", "expires_at"), key, []byte("0"), int64(0)); err != nil {
+		return 0, err
+	}
 	var raw []byte
 	var exp int64
 	cur := int64(0)
@@ -190,7 +223,20 @@ func (b *SQLBackend) Acquire(name, owner string, duration time.Duration) (bool, 
 		return false, err
 	}
 	n, err := res.RowsAffected()
-	return n == 1, err
+	if err != nil || n == 1 {
+		return n == 1, err
+	}
+	// MySQL reports 0 affected rows for an UPDATE that changes nothing (a
+	// lock without expiry refreshed by its owner), so check the owner.
+	var cur string
+	var curExp int64
+	if err := b.db.QueryRowContext(ctx, b.d.Rebind(fmt.Sprintf("SELECT owner, expires_at FROM %s WHERE name = ?", b.locks)), name).Scan(&cur, &curExp); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return cur == owner && live(curExp), nil
 }
 
 // Release frees the lock; ErrLockNotOwned if another owner holds it.
