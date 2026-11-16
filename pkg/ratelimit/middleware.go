@@ -68,7 +68,10 @@ func Throttle(name string) context.HandlerFunc {
 	}
 }
 
-// ThrottleMax returns an HTTP middleware enforcing an inline sliding-window threshold.
+// ThrottleMax returns an HTTP middleware enforcing an inline sliding-window
+// threshold per client IP (or keyResolver's key). Routes using the same
+// limit and key share a counter; use Throttle with a named limiter to keep
+// them apart.
 func ThrottleMax(maxAttempts int, window time.Duration, keyResolver ...func(c *context.Context) string) context.HandlerFunc {
 	return func(c *context.Context) error {
 		key := c.ClientIP()
@@ -78,7 +81,9 @@ func ThrottleMax(maxAttempts int, window time.Duration, keyResolver ...func(c *c
 			}
 		}
 
-		storageKey := fmt.Sprintf("rl:inline:%s", key)
+		// The limit is part of the key: two routes with different inline
+		// limits must not share (and use up) one counter.
+		storageKey := fmt.Sprintf("rl:inline:%d:%s:%s", maxAttempts, window, key)
 		store := GetStore()
 
 		res, err := store.Hit(storageKey, maxAttempts, window)

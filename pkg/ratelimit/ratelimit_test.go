@@ -544,3 +544,32 @@ func ConcurrentAllowed(t *testing.T, s ratelimit.Store, n, limit int) int {
 	wg.Wait()
 	return int(atomic.LoadInt32(&allowed))
 }
+
+func TestThrottleMaxRoutesDoNotShareCounters(t *testing.T) {
+	ratelimit.SetStore(ratelimit.NewMemoryStore())
+	app := golaravel.New()
+	ok := func(c *context.Context) error { return c.String(http.StatusOK, "ok") }
+	app.GET("/login", ratelimit.ThrottleMax(2, time.Minute), ok)
+	app.GET("/feed", ratelimit.ThrottleMax(100, time.Minute), ok)
+	hit := func(path string) int {
+		req := httptest.NewRequest("GET", path, nil)
+		req.RemoteAddr = "203.0.113.50:1234"
+		rec := httptest.NewRecorder()
+		app.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	for i := 0; i < 10; i++ {
+		if code := hit("/feed"); code != http.StatusOK {
+			t.Fatalf("feed request %d: %d", i, code)
+		}
+	}
+	// Feed traffic must not have used up the stricter login limit.
+	for i := 0; i < 2; i++ {
+		if code := hit("/login"); code != http.StatusOK {
+			t.Fatalf("login attempt %d blocked by another route's traffic: %d", i, code)
+		}
+	}
+	if code := hit("/login"); code != http.StatusTooManyRequests {
+		t.Fatalf("third login attempt: %d", code)
+	}
+}

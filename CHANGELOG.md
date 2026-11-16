@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Algorithm checks:** the algorithm always comes from the manager, never from the token. Key-based managers refuse HS256 (no confusion with a public key used as an HMAC secret), and secret managers refuse key-signed tokens.
   - **Interoperability:** the ES256 format is checked against the example in RFC 7515, appendix A.3.
 
+### Fixed
+- **`ratelimit.ThrottleMax` routes shared one counter.** The counter was keyed only by client IP, so traffic on a route with a loose limit used up a strict one elsewhere (for example a feed route locking users out of login). The limit is now part of the key.
+
+### Deprecated
+- **`middleware.RateLimiter`** now delegates to `ratelimit.ThrottleMax(n, time.Minute)` instead of keeping its own in-memory token buckets. It therefore uses the configured `ratelimit` store (shared between instances with the Redis store) and sends the standard `X-RateLimit-*` headers. Use `ratelimit.ThrottleMax` or `ratelimit.Throttle` directly.
+
 ## [v1.10.0] - 2026-11-16
 
 ### Added
