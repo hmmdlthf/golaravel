@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -23,6 +24,11 @@ type LocalDriver struct {
 	basePath string
 	baseURL  string
 	secret   []byte
+
+	// randomSecret is set when no secret was configured; the warning is
+	// logged once, the first time a URL is actually signed.
+	randomSecret bool
+	warnOnce     sync.Once
 }
 
 // insecureDefaultSecret is the fallback earlier versions used; it is public.
@@ -35,7 +41,7 @@ func NewLocalDriver(basePath, baseURL string, secret ...string) (*LocalDriver, e
 		return nil, fmt.Errorf("storage: failed to create root directory: %w", err)
 	}
 
-	sec := ""
+	sec, random := "", false
 	if len(secret) > 0 {
 		sec = secret[0]
 	}
@@ -46,13 +52,15 @@ func NewLocalDriver(basePath, baseURL string, secret ...string) (*LocalDriver, e
 		b := make([]byte, 32)
 		_, _ = rand.Read(b)
 		sec = hex.EncodeToString(b)
-		slog.Warn("storage: no signing secret configured (APP_KEY / STORAGE_SECRET); using a random key, so signed URLs end on restart")
+		random = true
 	}
 
 	return &LocalDriver{
 		basePath: basePath,
 		baseURL:  strings.TrimRight(baseURL, "/"),
 		secret:   []byte(sec),
+
+		randomSecret: random,
 	}, nil
 }
 
@@ -239,6 +247,11 @@ func (d *LocalDriver) URL(path string) string {
 
 // sign generates an HMAC-SHA256 signature for path, expires, and action.
 func (d *LocalDriver) sign(path string, expires int64, action string) string {
+	if d.randomSecret {
+		d.warnOnce.Do(func() {
+			slog.Warn("storage: no signing secret configured (APP_KEY / STORAGE_SECRET); using a random key, so signed URLs end on restart")
+		})
+	}
 	mac := hmac.New(sha256.New, d.secret)
 	data := fmt.Sprintf("%s|%d|%s", path, expires, action)
 	mac.Write([]byte(data))

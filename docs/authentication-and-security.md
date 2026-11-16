@@ -30,6 +30,7 @@ GoLaravel supports multiple pluggable authentication strategies that can be used
 | Guard | Transport | Ideal For |
 |---|---|---|
 | `BearerGuard(jwt)` | `Authorization: Bearer <jwt>` | Flutter (Mobile, Desktop, Web) and Mobile APIs |
+| `SessionGuard(provider, opts)` | Session cookie (`session.StartSession`) | Server-rendered sites with login forms (see below) |
 | `CookieGuard(jwt, "session_name")` | HTTP-only Cookie | Server-rendered web apps & Micro-SSRs |
 | `APIKeyGuard(validator, "X-API-Key")` | Header `X-API-Key` or `Authorization: ApiKey <key>` | Machine-to-machine & Developer APIs |
 | `MultiGuard(guards...)` | Evaluates guards in fallback sequence | Unified endpoints supporting Mobile, Web, and CLI |
@@ -192,6 +193,48 @@ app.Use(middleware.CSRF())
 app.Use(ratelimit.ThrottleMax(60, time.Minute)) // see docs/rate-limiting-and-throttling.md
 ```
 
+## Session login for server-rendered sites
+
+For HTML sites with a login form, keep the login in the session (like Laravel's `web` guard)
+instead of issuing a JWT. `auth.Login` regenerates the session id (the old one is deleted, so
+session fixation can't work), stores the user id and renews the CSRF token. `auth.Logout`
+flushes and deletes the session and issues a new CSRF token. `auth.SessionGuard` loads the
+user through your `UserProvider`, so `auth.User(c)` works with cookies.
+
+```go
+mgr := session.NewManager(session.Config{Driver: drv, SecretKey: os.Getenv("APP_KEY")})
+users := auth.UserProviderFunc(func(id string) (auth.Authenticatable, error) {
+    return client.User.Get(ctx, mustAtoi(id))
+})
+
+web := app.Group("/", session.StartSession(mgr), session.VerifyCSRFToken())
+web.POST("/login", func(c *context.Context) error {
+    u, err := findAndCheckPassword(c) // your credential check (hash.Check)
+    if err != nil {
+        return c.Redirect(http.StatusSeeOther, "/login?error=1")
+    }
+    if err := auth.Login(c, u); err != nil {
+        return err
+    }
+    return c.Redirect(http.StatusSeeOther, "/dashboard")
+})
+web.POST("/logout", func(c *context.Context) error {
+    _ = auth.Logout(c)
+    return c.Redirect(http.StatusSeeOther, "/login")
+})
+
+admin := web.Group("/dashboard", auth.SessionGuard(users, auth.SessionGuardOptions{RedirectTo: "/login"}))
+```
+
+Without `RedirectTo` the guard answers `401` JSON. `auth.SessionGuardFunc(users)` plugs into
+`MultiGuard`. A user the provider no longer finds is logged out.
+
+**Log out other devices.** `auth.LogoutOtherDevices(c)` ends every other session of the
+logged-in user, for example after a password change. `mgr.DestroyUserSessions(userID)` ends all
+of them (for example when an admin disables an account). This works with the memory, file, SQL
+and Redis drivers; the cookie driver returns `session.ErrUserSessionsUnsupported`, because those
+sessions live only in the browser.
+
 ## Password reset tokens across restarts and instances
 
 By default, password reset tokens are kept in memory. A restart, or a second instance, breaks
@@ -207,8 +250,19 @@ ctrl := auth.NewWorkflowController(auth.WorkflowConfig{
 broker := auth.NewPasswordResetBrokerWithStore(auth.CacheResetTokenStore(store), time.Hour)
 ```
 
-Only a hash of each token is stored, and cache keys use a hash of the email address. To use
-your own storage, implement `auth.ResetTokenStore`.
+Only a hash of each token is stored, and cache keys use a hash of the email address.
+
+Or keep them in a table, like Laravel's `password_reset_tokens` (SQLite, including the pure-Go
+`modernc.org/sqlite`, MySQL or Postgres). The table stores the email and the token hash:
+
+```go
+resets, err := auth.NewSQLResetTokenStore(db, database.SQLite) // table "password_reset_tokens"
+if err := resets.Migrate(ctx); err != nil { ... }
+ctrl := auth.NewWorkflowController(auth.WorkflowConfig{SecretKey: key, ResetTokens: resets})
+// Optionally, from the scheduler: resets.PruneExpired(ctx)
+```
+
+To use your own storage, implement `auth.ResetTokenStore`.
 
 ## JWT with public/private keys (RS256, ES256, EdDSA)
 

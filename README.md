@@ -53,7 +53,7 @@ golaravel/
 │   ├── view/               # Templ helpers (Blade-like @csrf, @method)
 │   ├── flutter/            # Flutter Web static hosting with SPA fallback
 │   ├── inertia/            # Full Inertia.js protocol adapter (React / Vue)
-│   ├── auth/               # Multi-guard auth (JWT Bearer, Sessions, Gates & Policies)
+│   ├── auth/               # Multi-guard auth (JWT Bearer, session login & guard, Gates & Policies, password resets)
 │   ├── hash/               # Password hashing (Argon2id, Bcrypt with work-factor upgrades)
 │   ├── validation/         # Form requests with 422 JSON error bags
 │   ├── queue/              # Concurrent background job queues & worker pools
@@ -66,7 +66,7 @@ golaravel/
 │   ├── broadcast/          # Realtime WebSockets & SSE broadcasting with Ent hooks
 │   ├── notification/       # Multi-channel notifications (Mail, DB, Broadcast, Slack, SMS)
 │   ├── privacy/            # Multi-tenancy isolation scopes, soft deletes, and mixins
-│   ├── session/            # Encrypted sessions (memory, file, cookie, SQL, Redis), flash messages, CSRF tokens
+│   ├── session/            # Encrypted sessions (memory, file, cookie, SQL, Redis) linked to users, flash messages, CSRF tokens
 │   ├── config/             # Multi-environment config loader (.env, typed getters)
 │   ├── database/           # High-concurrency connection pools, Atlas migrations & Seeders
 │   ├── http/               # Fluent outbound HTTP client & mocking engine (Http::fake)
