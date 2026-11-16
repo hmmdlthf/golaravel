@@ -2,8 +2,10 @@ package auth
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
@@ -32,14 +34,53 @@ type JWTClaims struct {
 	Sub    string         `json:"sub"`              // Subject (User ID)
 	Exp    int64          `json:"exp"`              // Expiration time
 	Iat    int64          `json:"iat"`              // Issued at
+	Nbf    int64          `json:"nbf,omitempty"`    // Not before
+	Iss    string         `json:"iss,omitempty"`    // Issuer
+	Aud    string         `json:"aud,omitempty"`    // Audience
+	Jti    string         `json:"jti,omitempty"`    // Unique token id (for revocation lists)
 	Custom map[string]any `json:"custom,omitempty"` // Custom claims
 }
 
 // JWTManager handles signing and validating JWT bearer tokens.
 type JWTManager struct {
-	secret  []byte
-	ttl     time.Duration
-	revoked func(claims *JWTClaims) bool
+	secret   []byte
+	previous [][]byte
+	ttl      time.Duration
+	issuer   string
+	audience string
+	leeway   time.Duration
+	revoked  func(claims *JWTClaims) bool
+}
+
+// Issuer stamps iss on issued tokens and requires it on verified ones.
+func (m *JWTManager) Issuer(iss string) *JWTManager {
+	m.issuer = iss
+	return m
+}
+
+// Audience stamps aud on issued tokens and requires it on verified ones, so
+// a token minted for one service is not accepted by another sharing the key.
+func (m *JWTManager) Audience(aud string) *JWTManager {
+	m.audience = aud
+	return m
+}
+
+// Leeway tolerates clock skew when checking exp and nbf.
+func (m *JWTManager) Leeway(d time.Duration) *JWTManager {
+	m.leeway = d
+	return m
+}
+
+// RotateFrom keeps accepting tokens signed with older secrets while new
+// tokens are signed with the current one. Drop the old secrets once their
+// tokens have expired.
+func (m *JWTManager) RotateFrom(oldSecrets ...string) *JWTManager {
+	for _, s := range oldSecrets {
+		if s != "" {
+			m.previous = append(m.previous, []byte(s))
+		}
+	}
+	return m
 }
 
 // RevokedUsing registers a check run on every verified token; returning true
@@ -70,10 +111,18 @@ func (m *JWTManager) GenerateToken(sub string, custom ...map[string]any) (string
 	}
 
 	now := time.Now()
+	jti := make([]byte, 16)
+	if _, err := rand.Read(jti); err != nil {
+		return "", err
+	}
 	claims := JWTClaims{
 		Sub: sub,
 		Iat: now.Unix(),
+		Nbf: now.Unix(),
 		Exp: now.Add(m.ttl).Unix(),
+		Iss: m.issuer,
+		Aud: m.audience,
+		Jti: hex.EncodeToString(jti),
 	}
 	if len(custom) > 0 {
 		claims.Custom = custom[0]
@@ -114,9 +163,18 @@ func (m *JWTManager) VerifyToken(tokenString string) (*JWTClaims, error) {
 	}
 
 	message := parts[0] + "." + parts[1]
-	expectedSig := m.sign(message)
 	actualSig, err := base64.RawURLEncoding.DecodeString(parts[2])
-	if err != nil || !hmac.Equal(expectedSig, actualSig) {
+	if err != nil {
+		return nil, ErrTokenInvalid
+	}
+	valid := hmac.Equal(signWith(m.secret, message), actualSig)
+	for _, old := range m.previous {
+		if valid {
+			break
+		}
+		valid = hmac.Equal(signWith(old, message), actualSig)
+	}
+	if !valid {
 		return nil, ErrTokenInvalid
 	}
 
@@ -130,8 +188,19 @@ func (m *JWTManager) VerifyToken(tokenString string) (*JWTClaims, error) {
 		return nil, ErrTokenInvalid
 	}
 
-	if time.Now().Unix() > claims.Exp {
+	now := time.Now()
+	leeway := int64(m.leeway / time.Second)
+	if now.Unix() > claims.Exp+leeway {
 		return nil, ErrTokenExpired
+	}
+	if claims.Nbf != 0 && now.Unix()+leeway < claims.Nbf {
+		return nil, ErrTokenInvalid
+	}
+	if m.issuer != "" && claims.Iss != m.issuer {
+		return nil, ErrTokenInvalid
+	}
+	if m.audience != "" && claims.Aud != m.audience {
+		return nil, ErrTokenInvalid
 	}
 	if m.revoked != nil && m.revoked(&claims) {
 		return nil, ErrTokenRevoked
@@ -141,7 +210,11 @@ func (m *JWTManager) VerifyToken(tokenString string) (*JWTClaims, error) {
 }
 
 func (m *JWTManager) sign(message string) []byte {
-	h := hmac.New(sha256.New, m.secret)
+	return signWith(m.secret, message)
+}
+
+func signWith(secret []byte, message string) []byte {
+	h := hmac.New(sha256.New, secret)
 	h.Write([]byte(message))
 	return h.Sum(nil)
 }
