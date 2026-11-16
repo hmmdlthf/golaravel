@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Security
+- **Mail header injection (`pkg/mail`)**: the subject, From/To/Cc/Bcc/Reply-To, custom headers and attachment filenames were written into the message headers as-is. A line break in user input (for example a contact-form name or subject) could add headers such as `Bcc` and turn the app into a spam relay. `BuildMIME` now returns `ErrInvalidHeader` for line breaks, unparsable addresses and invalid header names.
+- **Metrics and health report (`pkg/telemetry`)**: `MountOptions.Authorize` guards `/metrics`, `/health` and the report attached to a failing `/readyz`. `/livez` and the `/readyz` status stay public for probes.
+
+### Added
+- **Mail encoding**: non-ASCII display names and subjects are RFC 2047 encoded, attachment names are RFC 2231 encoded, and custom headers are written in sorted order.
+- **`SecureHeaders(SecureHeadersOptions{...})`**: `ContentSecurityPolicy` (or `CSPReportOnly`), `PermissionsPolicy`, `FrameOptions` and `HSTSMaxAge`; `middleware.StrictCSP` is a starting policy. `SecureHeaders()` with no options behaves as before.
+- **JWT**:
+  - `JWTManager.Issuer` / `Audience` stamp `iss` / `aud` on issued tokens and require them on verified ones.
+  - Tokens carry `nbf` and a random `jti`, and a future `nbf` is rejected.
+  - `Leeway` tolerates clock skew, and `RotateFrom(oldSecrets...)` keeps accepting tokens signed with previous secrets.
+  - Tokens without these claims still verify.
+
+### Changed
+- Attachment filenames without special characters are written unquoted (`filename=invoice.pdf`), as `mime.FormatMediaType` produces. This is valid MIME.
+
 ## [v1.6.0] - 2026-11-16
 
 ### Security
