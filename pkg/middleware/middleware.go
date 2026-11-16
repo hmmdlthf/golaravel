@@ -149,17 +149,64 @@ func CORS(opts ...CORSOptions) context.HandlerFunc {
 	}
 }
 
+// SecureHeadersOptions configures SecureHeaders.
+type SecureHeadersOptions struct {
+	// ContentSecurityPolicy is sent as Content-Security-Policy when set.
+	// StrictCSP is a reasonable starting point for server-rendered apps.
+	ContentSecurityPolicy string
+	// CSPReportOnly sends the policy as Content-Security-Policy-Report-Only,
+	// to try a policy without breaking pages.
+	CSPReportOnly bool
+	// FrameOptions overrides X-Frame-Options (default "SAMEORIGIN").
+	FrameOptions string
+	// HSTSMaxAge overrides the HSTS max-age in seconds on HTTPS requests
+	// (default one year); a negative value disables HSTS.
+	HSTSMaxAge int
+	// PermissionsPolicy is sent as Permissions-Policy when set.
+	PermissionsPolicy string
+}
+
+// StrictCSP allows only same-origin scripts, styles, images and frames, and
+// no plugins. Pages with inline scripts or styles need nonces or hashes, or
+// a looser policy.
+const StrictCSP = "default-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'"
+
 // SecureHeaders adds security best practice headers to all responses.
-func SecureHeaders() context.HandlerFunc {
+func SecureHeaders(opts ...SecureHeadersOptions) context.HandlerFunc {
+	var o SecureHeadersOptions
+	if len(opts) > 0 {
+		o = opts[0]
+	}
+	frame := o.FrameOptions
+	if frame == "" {
+		frame = "SAMEORIGIN"
+	}
+	hsts := ""
+	switch {
+	case o.HSTSMaxAge == 0:
+		hsts = "max-age=31536000"
+	case o.HSTSMaxAge > 0:
+		hsts = fmt.Sprintf("max-age=%d", o.HSTSMaxAge)
+	}
+	cspHeader := "Content-Security-Policy"
+	if o.CSPReportOnly {
+		cspHeader = "Content-Security-Policy-Report-Only"
+	}
 	return func(c *context.Context) error {
 		c.SetHeader("X-Content-Type-Options", "nosniff")
-		c.SetHeader("X-Frame-Options", "SAMEORIGIN")
+		c.SetHeader("X-Frame-Options", frame)
 		// The legacy XSS auditor is itself exploitable; "0" disables it
 		// (current OWASP advice). Use a Content-Security-Policy instead.
 		c.SetHeader("X-XSS-Protection", "0")
 		c.SetHeader("Referrer-Policy", "strict-origin-when-cross-origin")
-		if c.Request.TLS != nil || strings.EqualFold(c.Header("X-Forwarded-Proto"), "https") {
-			c.SetHeader("Strict-Transport-Security", "max-age=31536000")
+		if o.ContentSecurityPolicy != "" {
+			c.SetHeader(cspHeader, o.ContentSecurityPolicy)
+		}
+		if o.PermissionsPolicy != "" {
+			c.SetHeader("Permissions-Policy", o.PermissionsPolicy)
+		}
+		if hsts != "" && (c.Request.TLS != nil || strings.EqualFold(c.Header("X-Forwarded-Proto"), "https")) {
+			c.SetHeader("Strict-Transport-Security", hsts)
 		}
 		return c.Next()
 	}
