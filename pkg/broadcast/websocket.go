@@ -7,17 +7,9 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/gorilla/websocket"
 	"github.com/golaravel/golaravel/pkg/context"
+	"github.com/gorilla/websocket"
 )
-
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  4096,
-	WriteBufferSize: 4096,
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow cross-origin WebSocket connections from Flutter apps
-	},
-}
 
 // ClientCommand represents a message sent from the WebSocket client to the server.
 type ClientCommand struct {
@@ -26,13 +18,37 @@ type ClientCommand struct {
 }
 
 // WebSocketHandler returns a handler that upgrades the connection to full-duplex WebSocket.
+//
+// Browser connections are accepted from the page's own origin and from
+// Options.AllowedOrigins only (see WebSocketHandlerWith), so another site
+// cannot open a WebSocket with the user's cookies. Clients that send no
+// Origin (native apps) are accepted. Every subscription is authorized (see
+// Channel).
 func WebSocketHandler(h ...*Hub) context.HandlerFunc {
-	hub := DefaultHub()
-	if len(h) > 0 && h[0] != nil {
-		hub = h[0]
+	opts := Options{}
+	if len(h) > 0 {
+		opts.Hub = h[0]
 	}
+	return WebSocketHandlerWith(opts)
+}
 
+// WebSocketHandlerWith is WebSocketHandler with options.
+func WebSocketHandlerWith(opts Options) context.HandlerFunc {
+	hub := opts.hub()
+	maxSubs := opts.MaxSubscriptions
+	if maxSubs <= 0 {
+		maxSubs = 100
+	}
 	return func(c *context.Context) error {
+		if !opts.originAllowed(c) {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "origin_not_allowed"})
+		}
+		upgrader := websocket.Upgrader{
+			ReadBufferSize:  4096,
+			WriteBufferSize: 4096,
+			// The origin was checked above against opts.
+			CheckOrigin: func(*http.Request) bool { return true },
+		}
 		conn, err := upgrader.Upgrade(c.Response.ResponseWriter, c.Request, nil)
 		if err != nil {
 			slog.Error("websocket upgrade error", "error", err)
@@ -104,7 +120,23 @@ func WebSocketHandler(h ...*Hub) context.HandlerFunc {
 				if cmd.Channel == "" {
 					continue
 				}
+				refuse := func(reason string) {
+					msg, _ := json.Marshal(map[string]string{"event": "subscription_error", "channel": cmd.Channel, "error": reason})
+					select {
+					case sendChan <- msg:
+					default:
+					}
+				}
+				if !opts.authorizeChannel(c, cmd.Channel) {
+					refuse("forbidden")
+					continue
+				}
 				mu.Lock()
+				if _, exists := clientSubs[cmd.Channel]; !exists && len(clientSubs) >= maxSubs {
+					mu.Unlock()
+					refuse("too_many_subscriptions")
+					continue
+				}
 				if _, exists := clientSubs[cmd.Channel]; !exists {
 					msgChan, unsub := hub.Subscribe(cmd.Channel)
 					clientSubs[cmd.Channel] = unsub
