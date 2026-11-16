@@ -97,6 +97,9 @@ func NewManager(cfg ...Config) *Manager {
 	if c.Driver == nil {
 		c.Driver = NewMemoryDriver()
 	}
+	if la, ok := c.Driver.(lifetimeAware); ok {
+		la.setLifetime(c.Lifetime)
+	}
 	// Secure by default whatever the caller's zero values say.
 	c.HttpOnly = !c.AllowScriptAccess
 	_, cookieDriver := c.Driver.(*CookieDriver)

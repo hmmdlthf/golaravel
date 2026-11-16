@@ -191,3 +191,21 @@ app.Use(middleware.CSRF())
 // In-Memory Token Bucket Rate Limiting (e.g. 60 requests/minute per IP)
 app.Use(middleware.RateLimiter(60))
 ```
+
+## Password reset tokens across restarts and instances
+
+By default, password reset tokens are kept in memory. A restart, or a second instance, breaks
+any reset that's still pending. Store them in a shared cache instead:
+
+```go
+store := cache.NewRedisStore(rc) // or cache.NewSQLStore(...)
+ctrl := auth.NewWorkflowController(auth.WorkflowConfig{
+    SecretKey:   os.Getenv("APP_KEY"),
+    ResetTokens: auth.CacheResetTokenStore(store),
+})
+// Or directly:
+broker := auth.NewPasswordResetBrokerWithStore(auth.CacheResetTokenStore(store), time.Hour)
+```
+
+Only a hash of each token is stored, and cache keys use a hash of the email address. To use
+your own storage, implement `auth.ResetTokenStore`.

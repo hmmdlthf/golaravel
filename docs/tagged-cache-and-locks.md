@@ -141,3 +141,30 @@ if err == nil && acquired {
 ### Concurrency Safety Guarantees:
 - **Owner Token Tracking**: Each lock instance is assigned a unique cryptographic owner token (`lock.Owner()`). A process can **never** release a lock that expired and was subsequently acquired by another worker (`ErrLockNotOwned`).
 - **TTL Auto-Expiration**: If a worker crashes while holding a lock, the lock automatically expires after the configured duration, preventing permanent deadlocks.
+
+## Shared cache stores (SQL and Redis)
+
+`cache.NewMemoryStore` is per process. The SQL and Redis stores implement the same `cache.Store`
+API, so every instance sees the same values, tag flushes and locks.
+
+```go
+// Redis: keys live under "golaravel:cache:" (Flush only deletes those).
+rc, _ := redis.New(redis.Config{Addr: "127.0.0.1:6379"})
+cache.SetDefaultStore(cache.NewRedisStore(rc))
+
+// SQL (SQLite, MySQL, Postgres): tables "cache" and "cache_locks".
+store, backend, err := cache.NewSQLStore(db, database.MySQL)
+_ = backend.Migrate(ctx)
+cache.SetDefaultStore(store)
+// Expired rows are ignored on read; delete them now and then:
+_ = backend.Prune(ctx)
+```
+
+Things to know:
+
+- **Values are stored as JSON.** `Get` returns strings, bools, `int64` (whole numbers), `float64`,
+  `map[string]any` and `[]any`. Use the typed getters (`GetInt`, `GetString`, ...) or decode into
+  your own types.
+- **Tags:** tag versions are kept in the store, so `Tags(...).Flush()` reaches every instance.
+- **Locks:** taken atomically in Redis (`SET NX`) and in SQL (unique row). A lock expires after
+  its duration.

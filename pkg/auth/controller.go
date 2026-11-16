@@ -74,6 +74,9 @@ type WorkflowConfig struct {
 	AppName   string
 	AppURL    string
 	Callbacks WorkflowCallbacks
+	// ResetTokens stores password reset tokens; default in memory (lost
+	// on restart, per process). See CacheResetTokenStore.
+	ResetTokens ResetTokenStore
 }
 
 // NewWorkflowController instantiates a turnkey authentication controller.
@@ -88,7 +91,7 @@ func NewWorkflowController(cfg WorkflowConfig) *WorkflowController {
 	return &WorkflowController{
 		jwt:                NewJWTManager(cfg.SecretKey, 24*time.Hour),
 		totp:               NewTOTPManager(TOTPOptions{Issuer: cfg.AppName}),
-		passwordResets:     NewPasswordResetBroker(60 * time.Minute),
+		passwordResets:     NewPasswordResetBrokerWithStore(cfg.ResetTokens, 60*time.Minute),
 		emailVerifications: NewEmailVerificationBroker(cfg.SecretKey),
 		twoFactorChallenge: NewTwoFactorChallengeBroker(cfg.SecretKey),
 		callbacks:          cfg.Callbacks,

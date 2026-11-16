@@ -13,6 +13,37 @@ type TagManager struct {
 	mu          sync.RWMutex
 	tagVersions map[string]int64
 	tagKeys     map[string]map[string]struct{}
+	// shared, when set, holds tag versions outside this process (in the
+	// cache backend), so a flush on one instance reaches all of them.
+	shared tagVersionSource
+}
+
+type tagVersionSource interface {
+	version(tag string) int64
+	bump(tag string)
+}
+
+func newSharedTagManager(src tagVersionSource) *TagManager {
+	tm := NewTagManager()
+	tm.shared = src
+	return tm
+}
+
+func (tm *TagManager) sharedKey(tags []string, key string) string {
+	sortedTags := make([]string, len(tags))
+	copy(sortedTags, tags)
+	sort.Strings(sortedTags)
+	var sb strings.Builder
+	sb.WriteString("tag:")
+	for _, t := range sortedTags {
+		sb.WriteString(t)
+		sb.WriteString(":")
+		sb.WriteString(fmt.Sprint(tm.shared.version(t)))
+		sb.WriteString(":")
+	}
+	sb.WriteString("key:")
+	sb.WriteString(key)
+	return sb.String()
 }
 
 // NewTagManager creates a tag manager.
@@ -25,6 +56,9 @@ func NewTagManager() *TagManager {
 
 // TaggedKey generates an O(1) versioned cache key incorporating the current versions of all tags.
 func (tm *TagManager) TaggedKey(tags []string, key string) string {
+	if tm.shared != nil {
+		return tm.sharedKey(tags, key)
+	}
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
@@ -63,6 +97,9 @@ func (tm *TagManager) TaggedKey(tags []string, key string) string {
 
 // ReadTaggedKey generates the versioned key for reading without modifying the tag mapping.
 func (tm *TagManager) ReadTaggedKey(tags []string, key string) string {
+	if tm.shared != nil {
+		return tm.sharedKey(tags, key)
+	}
 	tm.mu.RLock()
 	defer tm.mu.RUnlock()
 
@@ -91,6 +128,12 @@ func (tm *TagManager) ReadTaggedKey(tags []string, key string) string {
 // FlushTag increments the tag version to immediately invalidate all current tagged keys in O(1)
 // and returns all mapped keys for underlying memory eviction.
 func (tm *TagManager) FlushTag(tag string) []string {
+	if tm.shared != nil {
+		// Old entries are unreachable after the bump and expire with
+		// their TTL.
+		tm.shared.bump(tag)
+		return nil
+	}
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 

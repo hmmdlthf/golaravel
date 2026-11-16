@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.8.0] - 2026-11-16
+
+### Added
+- **Persistent sessions (`pkg/session`)**:
+  - `NewSQLDriver(db, dialect)` (SQLite, MySQL, Postgres; `Migrate` creates the table; idle sessions expire on read and are removed by `GC`) and `NewRedisDriver(client)` (TTL = session lifetime). Sessions survive restarts and are shared between instances.
+  - Both drivers take the lifetime from the `Manager`.
+  - `Manager.StartGC(ctx, interval)` runs the driver's GC. Nothing called it before, so memory and file sessions were never cleaned up.
+- **Shared cache stores (`pkg/cache`)**:
+  - `NewSQLStore(db, dialect)` (with `Migrate` and `Prune`) and `NewRedisStore(client)` implement the full `Store` API through a small `Backend` interface (`NewBackendStore`).
+  - Values are stored as JSON. `Add`, `Increment` and locks are atomic in the backend.
+  - Tag versions live in the backend, so a tag flush reaches every instance. Redis `Flush` only deletes keys under the store prefix.
+- **Password reset tokens (`pkg/auth`)**:
+  - `ResetTokenStore`, with `NewMemoryResetTokenStore` (the default) and `CacheResetTokenStore(cache.Store)`.
+  - Configure the store with `NewPasswordResetBrokerWithStore` and `WorkflowConfig.ResetTokens`.
+  - Only token hashes are stored, and emails are trimmed and lower-cased.
+- **`pkg/redis`**: a small pooled RESP client (`New`, `Do`, `String`, `Int`, `Scan`) with per-command deadlines. Broken connections are dropped rather than reused. `pkg/redis/redistest` is an in-process fake for tests.
+- **`database.Dialect`** (`SQLite`, `MySQL`, `Postgres`, `ParseDialect`): placeholder rebinding, upsert / insert-ignore statements and column types for SQL-backed stores.
+
+### Notes
+- The SQL stores are tested on SQLite only. The MySQL and Postgres statements follow each engine's syntax but have not been run against a server.
+- `pkg/queue` and `pkg/ratelimit` still use their own copies of a Redis client. They can move to `pkg/redis` later.
+
 ## [v1.7.0] - 2026-11-16
 
 ### Security

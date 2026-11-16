@@ -59,13 +59,14 @@ golaravel/
 │   ├── queue/              # Concurrent background job queues & worker pools
 │   ├── schedule/           # In-process fluent cron scheduler & distributed task runner
 │   ├── events/             # Synchronous & asynchronous event dispatcher
-│   ├── cache/              # Tagged cache engine, atomic locks, Memory & Redis with TTL
+│   ├── cache/              # Tagged cache engine, atomic locks; Memory, SQL & Redis stores with TTL
+│   ├── redis/              # Small pooled Redis (RESP) client used by the session & cache stores
 │   ├── storage/            # Multi-disk cloud filesystem (S3, MinIO, Local, SigV4 Presigned URLs)
 │   ├── mail/               # Advanced Mailables, Templ view templates, async queueing & Preview Studio
 │   ├── broadcast/          # Realtime WebSockets & SSE broadcasting with Ent hooks
 │   ├── notification/       # Multi-channel notifications (Mail, DB, Broadcast, Slack, SMS)
 │   ├── privacy/            # Multi-tenancy isolation scopes, soft deletes, and mixins
-│   ├── session/            # Encrypted stateful sessions, flash messages, and CSRF tokens
+│   ├── session/            # Encrypted sessions (memory, file, cookie, SQL, Redis), flash messages, CSRF tokens
 │   ├── config/             # Multi-environment config loader (.env, typed getters)
 │   ├── database/           # High-concurrency connection pools, Atlas migrations & Seeders
 │   ├── http/               # Fluent outbound HTTP client & mocking engine (Http::fake)

@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/golaravel/golaravel/pkg/cache"
 	"github.com/golaravel/golaravel/pkg/mail"
 	"github.com/golaravel/golaravel/pkg/notification"
 )
@@ -23,78 +25,174 @@ var (
 	ErrTwoFactorTokenExpired     = errors.New("auth/2fa: two-factor challenge token has expired or is invalid")
 )
 
-// PasswordResetBroker handles generation and validation of password reset tokens.
-type PasswordResetBroker struct {
-	mu     sync.RWMutex
-	tokens map[string]passwordResetEntry
-	ttl    time.Duration
+// ResetTokenStore keeps password reset token hashes. The default memory
+// store loses pending resets on restart and is per process; use
+// CacheResetTokenStore (with a SQL or Redis cache store) or your own store
+// when running more than one instance.
+type ResetTokenStore interface {
+	Put(email, tokenHash string, expiresAt time.Time) error
+	Get(email string) (tokenHash string, expiresAt time.Time, ok bool, err error)
+	Delete(email string) error
 }
+
+// PasswordResetBroker handles generation and validation of password reset tokens.
+// Only a SHA-256 hash of each token is stored.
+type PasswordResetBroker struct {
+	store ResetTokenStore
+	ttl   time.Duration
+}
+
+// NewPasswordResetBroker creates a new password reset broker with a default
+// 60-minute TTL, keeping tokens in memory.
+func NewPasswordResetBroker(ttl ...time.Duration) *PasswordResetBroker {
+	return NewPasswordResetBrokerWithStore(NewMemoryResetTokenStore(), ttl...)
+}
+
+// NewPasswordResetBrokerWithStore creates a broker that keeps tokens in store.
+func NewPasswordResetBrokerWithStore(store ResetTokenStore, ttl ...time.Duration) *PasswordResetBroker {
+	t := 60 * time.Minute
+	if len(ttl) > 0 && ttl[0] > 0 {
+		t = ttl[0]
+	}
+	if store == nil {
+		store = NewMemoryResetTokenStore()
+	}
+	return &PasswordResetBroker{store: store, ttl: t}
+}
+
+func normalizeEmail(email string) string { return strings.ToLower(strings.TrimSpace(email)) }
+
+func hashToken(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
+}
+
+// CreateToken generates a secure random token for the specified email and returns the plain token.
+func (b *PasswordResetBroker) CreateToken(email string) (string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	token := hex.EncodeToString(raw)
+	if err := b.store.Put(normalizeEmail(email), hashToken(token), time.Now().Add(b.ttl)); err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+// ValidateToken verifies a token for the given email without consuming it.
+func (b *PasswordResetBroker) ValidateToken(email, token string) bool {
+	stored, expiresAt, ok, err := b.store.Get(normalizeEmail(email))
+	if err != nil || !ok || time.Now().After(expiresAt) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(stored), []byte(hashToken(token))) == 1
+}
+
+// DeleteToken removes the token for an email upon successful password reset.
+func (b *PasswordResetBroker) DeleteToken(email string) {
+	_ = b.store.Delete(normalizeEmail(email))
+}
+
+// --- Memory store ---
 
 type passwordResetEntry struct {
 	tokenHash string
 	expiresAt time.Time
 }
 
-// NewPasswordResetBroker creates a new password reset broker with a default 60-minute TTL.
-func NewPasswordResetBroker(ttl ...time.Duration) *PasswordResetBroker {
-	t := 60 * time.Minute
-	if len(ttl) > 0 && ttl[0] > 0 {
-		t = ttl[0]
-	}
-	return &PasswordResetBroker{
-		tokens: make(map[string]passwordResetEntry),
-		ttl:    t,
-	}
+type memoryResetTokenStore struct {
+	mu     sync.RWMutex
+	tokens map[string]passwordResetEntry
 }
 
-// CreateToken generates a secure random token for the specified email and returns the plain token.
-func (b *PasswordResetBroker) CreateToken(email string) (string, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return "", err
-	}
-	token := hex.EncodeToString(raw)
-
-	h := sha256.Sum256([]byte(token))
-	tokenHash := hex.EncodeToString(h[:])
-
-	b.tokens[email] = passwordResetEntry{
-		tokenHash: tokenHash,
-		expiresAt: time.Now().Add(b.ttl),
-	}
-
-	return token, nil
+// NewMemoryResetTokenStore keeps reset tokens in process memory.
+func NewMemoryResetTokenStore() ResetTokenStore {
+	return &memoryResetTokenStore{tokens: make(map[string]passwordResetEntry)}
 }
 
-// ValidateToken verifies a token for the given email without consuming it.
-func (b *PasswordResetBroker) ValidateToken(email, token string) bool {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
-	entry, exists := b.tokens[email]
-	if !exists {
-		return false
+func (s *memoryResetTokenStore) Put(email, tokenHash string, expiresAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	for k, e := range s.tokens {
+		if now.After(e.expiresAt) {
+			delete(s.tokens, k)
+		}
 	}
-
-	if time.Now().After(entry.expiresAt) {
-		return false
-	}
-
-	h := sha256.Sum256([]byte(token))
-	targetHash := hex.EncodeToString(h[:])
-
-	return subtle.ConstantTimeCompare([]byte(entry.tokenHash), []byte(targetHash)) == 1
+	s.tokens[email] = passwordResetEntry{tokenHash: tokenHash, expiresAt: expiresAt}
+	return nil
 }
 
-// DeleteToken removes the token for an email upon successful password reset.
-func (b *PasswordResetBroker) DeleteToken(email string) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	delete(b.tokens, email)
+func (s *memoryResetTokenStore) Get(email string) (string, time.Time, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	e, ok := s.tokens[email]
+	return e.tokenHash, e.expiresAt, ok, nil
 }
+
+func (s *memoryResetTokenStore) Delete(email string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.tokens, email)
+	return nil
+}
+
+// --- Cache-backed store ---
+
+type cacheResetTokenStore struct {
+	c      cache.Store
+	prefix string
+}
+
+// CacheResetTokenStore keeps reset tokens in a cache store, for example
+// cache.NewSQLStore or cache.NewRedisStore, so pending resets survive
+// restarts and work on every instance. Keys hold a hash of the email, not
+// the email itself.
+func CacheResetTokenStore(c cache.Store, prefix ...string) ResetTokenStore {
+	p := "password_reset:"
+	if len(prefix) > 0 && prefix[0] != "" {
+		p = prefix[0]
+	}
+	return &cacheResetTokenStore{c: c, prefix: p}
+}
+
+func (s *cacheResetTokenStore) key(email string) string { return s.prefix + hashToken(email) }
+
+func (s *cacheResetTokenStore) Put(email, tokenHash string, expiresAt time.Time) error {
+	ttl := time.Until(expiresAt)
+	if ttl <= 0 {
+		return s.Delete(email)
+	}
+	return s.c.Put(s.key(email), map[string]any{"hash": tokenHash, "exp": expiresAt.Unix()}, ttl)
+}
+
+func (s *cacheResetTokenStore) Get(email string) (string, time.Time, bool, error) {
+	v, ok := s.c.Get(s.key(email))
+	if !ok {
+		return "", time.Time{}, false, nil
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		return "", time.Time{}, false, nil
+	}
+	h, _ := m["hash"].(string)
+	var exp int64
+	switch x := m["exp"].(type) {
+	case int64:
+		exp = x
+	case float64:
+		exp = int64(x)
+	case int:
+		exp = int64(x)
+	}
+	if h == "" || exp == 0 {
+		return "", time.Time{}, false, nil
+	}
+	return h, time.Unix(exp, 0), true, nil
+}
+
+func (s *cacheResetTokenStore) Delete(email string) error { return s.c.Forget(s.key(email)) }
 
 // EmailVerificationBroker generates and validates HMAC-signed verification URLs.
 type EmailVerificationBroker struct {
