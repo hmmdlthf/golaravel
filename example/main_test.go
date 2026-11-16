@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -106,7 +108,7 @@ func setupTestApp(t *testing.T) (*golaravel.Engine, *app.Client, string) {
 
 	flutter.ServeWeb(engine.Router, flutter.Options{
 		MountPath:   "/app",
-		DistDir:     "client/build/web",
+		DistDir:     testFlutterDist(t),
 		FallbackSPA: true,
 	})
 
@@ -278,3 +280,19 @@ func TestE2E_WithGoLaravelTestingHarness(t *testing.T) {
 		AssertJsonValidationErrors("customer_name", "customer_email")
 }
 
+// testFlutterDist returns a minimal Flutter web build in a temp dir, so the
+// test does not depend on a local `flutter build web` (client/build is
+// git-ignored and absent in CI).
+func testFlutterDist(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	index := `<!DOCTYPE html><html><head><base href="/"><meta charset="UTF-8"></head>` +
+		`<body><script src="flutter_bootstrap.js" async></script></body></html>`
+	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte(index), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "flutter_bootstrap.js"), []byte("// flutter bootstrap stub\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
