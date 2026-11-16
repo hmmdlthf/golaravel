@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.15.0] - 2026-11-16
 
 ### Security
 - **2FA bypass (`pkg/auth`)**: the `two_factor_token` returned after a correct password (before the second factor) was signed with the same secret as access tokens, so `BearerGuard` / `CookieGuard` accepted it as a full login. Two-factor authentication could be skipped entirely. Challenge tokens now use a derived key and their own audience, and the guards refuse them.
