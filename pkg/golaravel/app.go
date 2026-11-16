@@ -33,6 +33,19 @@ type Engine struct {
 	pool        sync.Pool
 	providers   []ServiceProvider
 	middlewares []gcontext.HandlerFunc
+	maxBody     int64
+}
+
+// DefaultMaxBodyBytes caps request bodies unless MaxBodyBytes changes it.
+// It matches the 32 MiB multipart parsing limit.
+const DefaultMaxBodyBytes int64 = 32 << 20
+
+// MaxBodyBytes sets the largest request body the application reads; bigger
+// bodies fail to read (BindJSON / form parsing return an error) instead of
+// filling memory. n <= 0 removes the limit.
+func (app *Engine) MaxBodyBytes(n int64) *Engine {
+	app.maxBody = n
+	return app
 }
 
 // New creates a bare GoLaravel application without default middlewares.
@@ -40,6 +53,7 @@ func New() *Engine {
 	app := &Engine{
 		Router:    router.New(),
 		Container: container.New(),
+		maxBody:   DefaultMaxBodyBytes,
 	}
 
 	app.pool.New = func() any {
@@ -80,6 +94,9 @@ func (app *Engine) Boot() error {
 // ServeHTTP implements http.Handler with zero-allocation context pooling.
 func (app *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Acquire pooled Context
+	if app.maxBody > 0 && r.Body != nil && r.Body != http.NoBody {
+		r.Body = http.MaxBytesReader(w, r.Body, app.maxBody)
+	}
 	c := app.pool.Get().(*gcontext.Context)
 	c.Reset(w, r)
 	c.Container = app.Container.Scoped()
@@ -114,6 +131,7 @@ func (app *Engine) Run(addr string) error {
 		Addr:              addr,
 		Handler:           app,
 		ReadHeaderTimeout: 5 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 		IdleTimeout:       60 * time.Second,
 	}
 

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -13,18 +14,36 @@ const (
 
 // Config configures the Session Manager.
 type Config struct {
-	Driver        Driver
-	CookieName    string
-	Lifetime      time.Duration
-	Path          string
-	Domain        string
-	Secure        bool
+	Driver     Driver
+	CookieName string
+	Lifetime   time.Duration
+	Path       string
+	Domain     string
+	Secure     bool
+	// HttpOnly is kept for compatibility and is always on unless
+	// AllowScriptAccess is set (a zero Config no longer turns it off).
 	HttpOnly      bool
 	SameSite      http.SameSite
 	ExpireOnClose bool
-	Encrypt       bool
-	SecretKey     string
+	// Encrypt is kept for compatibility: the session cookie is always
+	// encrypted unless DisableEncryption is set.
+	Encrypt bool
+	// SecretKey encrypts the session cookie. When empty, a random key is
+	// generated per process (sessions do not survive a restart and are not
+	// shared between instances) and a warning is logged. Set it from your
+	// application key in production.
+	SecretKey string
+
+	// AllowScriptAccess drops HttpOnly so browser JavaScript can read the
+	// session cookie. Avoid it.
+	AllowScriptAccess bool
+	// DisableEncryption stores the plain session id in the cookie (server
+	// side drivers only; the cookie driver always encrypts).
+	DisableEncryption bool
 }
+
+// insecureDefaultSecret is the key earlier versions shipped in DefaultConfig.
+const insecureDefaultSecret = "change-this-default-session-secret-key-32-chars"
 
 // DefaultConfig provides production-ready session defaults.
 var DefaultConfig = Config{
@@ -34,7 +53,6 @@ var DefaultConfig = Config{
 	HttpOnly:   true,
 	SameSite:   http.SameSiteLaxMode,
 	Encrypt:    true,
-	SecretKey:  "change-this-default-session-secret-key-32-chars",
 }
 
 // Manager coordinates session lifecycles, encryption, and driver storage.
@@ -62,12 +80,12 @@ func NewManager(cfg ...Config) *Manager {
 			c.Domain = userCfg.Domain
 		}
 		c.Secure = userCfg.Secure
-		c.HttpOnly = userCfg.HttpOnly
 		if userCfg.SameSite != 0 {
 			c.SameSite = userCfg.SameSite
 		}
 		c.ExpireOnClose = userCfg.ExpireOnClose
-		c.Encrypt = userCfg.Encrypt
+		c.AllowScriptAccess = userCfg.AllowScriptAccess
+		c.DisableEncryption = userCfg.DisableEncryption
 		if userCfg.SecretKey != "" {
 			c.SecretKey = userCfg.SecretKey
 		}
@@ -78,6 +96,18 @@ func NewManager(cfg ...Config) *Manager {
 
 	if c.Driver == nil {
 		c.Driver = NewMemoryDriver()
+	}
+	// Secure by default whatever the caller's zero values say.
+	c.HttpOnly = !c.AllowScriptAccess
+	_, cookieDriver := c.Driver.(*CookieDriver)
+	c.Encrypt = !c.DisableEncryption || cookieDriver
+	if c.SecretKey == "" || c.SecretKey == insecureDefaultSecret {
+		if c.SecretKey == insecureDefaultSecret {
+			slog.Warn("session: the built-in example SecretKey is public; using a random per-process key instead. Set Config.SecretKey.")
+		} else {
+			slog.Warn("session: no SecretKey configured; using a random per-process key (sessions end on restart). Set Config.SecretKey.")
+		}
+		c.SecretKey = generateRandomString(64)
 	}
 
 	return &Manager{

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"log/slog"
@@ -57,7 +59,12 @@ func main() {
 	// 4. Initialize JWT Manager
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		jwtSecret = "golaravel-super-secure-production-key-32-chars!"
+		// Never ship a fixed fallback secret: anyone who reads it can mint
+		// tokens. Tokens signed with this random key end on restart.
+		buf := make([]byte, 32)
+		_, _ = rand.Read(buf)
+		jwtSecret = hex.EncodeToString(buf)
+		log.Println("JWT_SECRET is not set; using a random key for this process")
 	}
 	jwtManager := auth.NewJWTManager(jwtSecret, 24*time.Hour)
 

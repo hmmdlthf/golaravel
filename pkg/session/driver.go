@@ -95,11 +95,32 @@ func NewFileDriver(dir string) (*FileDriver, error) {
 	return &FileDriver{dir: dir}, nil
 }
 
+// validSessionID reports whether id is a plain session id (hex or
+// alphanumeric, no path separators), so it can never name a file outside
+// the session directory.
+func validSessionID(id string) bool {
+	if len(id) < 16 || len(id) > 128 {
+		return false
+	}
+	for _, r := range id {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+// ErrInvalidSessionID is returned for ids that are not plain tokens.
+var ErrInvalidSessionID = errors.New("session: invalid session id")
+
 func (d *FileDriver) path(id string) string {
-	return filepath.Join(d.dir, filepath.Clean(id))
+	return filepath.Join(d.dir, id)
 }
 
 func (d *FileDriver) Read(id string) ([]byte, error) {
+	if !validSessionID(id) {
+		return nil, ErrSessionNotFound
+	}
 	data, err := os.ReadFile(d.path(id))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -111,10 +132,16 @@ func (d *FileDriver) Read(id string) ([]byte, error) {
 }
 
 func (d *FileDriver) Write(id string, data []byte) error {
+	if !validSessionID(id) {
+		return ErrInvalidSessionID
+	}
 	return os.WriteFile(d.path(id), data, 0600)
 }
 
 func (d *FileDriver) Destroy(id string) error {
+	if !validSessionID(id) {
+		return nil
+	}
 	err := os.Remove(d.path(id))
 	if err != nil && !os.IsNotExist(err) {
 		return err
