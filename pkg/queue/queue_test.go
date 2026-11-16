@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
+	gcontext "github.com/golaravel/golaravel/pkg/context"
 	"github.com/golaravel/golaravel/pkg/golaravel"
 )
 
@@ -694,7 +695,7 @@ func TestRedisFailedJobStore(t *testing.T) {
 
 func TestWorkerDashboard_HTTPAndAPI(t *testing.T) {
 	app := golaravel.New()
-	MountDashboard(app, "/queue")
+	MountDashboardWith(app, DashboardOptions{Prefix: "/queue", Authorize: func(*gcontext.Context) bool { return true }})
 
 	// 1. Test GET /queue/dashboard UI
 	req := httptest.NewRequest("GET", "/queue/dashboard", nil)
@@ -782,5 +783,27 @@ func TestMetrics_Tracking(t *testing.T) {
 	snap3 := m.Snapshot()
 	if snap3.TotalFailed != 1 {
 		t.Fatalf("expected 1 job failed, got %d", snap3.TotalFailed)
+	}
+}
+
+func TestWorkerDashboardRequiresAuthorize(t *testing.T) {
+	app := golaravel.New()
+	MountDashboard(app, "/queue")
+	for _, tc := range []struct{ method, path string }{{"GET", "/queue/dashboard"}, {"GET", "/queue/api/failed"}, {"POST", "/queue/api/flush"}} {
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, httptest.NewRequest(tc.method, tc.path, nil))
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("%s %s without Authorize: %d", tc.method, tc.path, w.Code)
+		}
+	}
+
+	app = golaravel.New()
+	MountDashboardWith(app, DashboardOptions{Authorize: func(*gcontext.Context) bool { return true }})
+	req := httptest.NewRequest("POST", "/queue/api/flush", nil)
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	w := httptest.NewRecorder()
+	app.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("cross-site flush: %d", w.Code)
 	}
 }

@@ -10,16 +10,53 @@ import (
 )
 
 // MountDashboard registers the Horizon-equivalent Worker Dashboard and API routes.
+//
+// Deprecated: it sets no Authorize function, so every route answers 403.
+// Use MountDashboardWith with DashboardOptions.Authorize.
 func MountDashboard(r router.RouteRegistrar, prefix ...string) {
+	opts := DashboardOptions{}
+	if len(prefix) > 0 {
+		opts.Prefix = prefix[0]
+	}
+	MountDashboardWith(r, opts)
+}
+
+// DashboardOptions configures MountDashboardWith.
+type DashboardOptions struct {
+	// Prefix is the dashboard path (default "/queue").
+	Prefix string
+	// Authorize decides who may use the dashboard. It is required: without
+	// it every dashboard route answers 403, because the dashboard shows job
+	// payloads and can retry, delete and flush jobs. If the routes are
+	// already behind your own auth middleware, return true.
+	Authorize func(c *context.Context) bool
+}
+
+// MountDashboardWith mounts the queue dashboard. Every route is checked with
+// opts.Authorize, and the routes that change state (retry, delete, flush)
+// also refuse cross-site browser requests.
+func MountDashboardWith(r router.RouteRegistrar, opts DashboardOptions) {
 	base := "/queue"
-	if len(prefix) > 0 && prefix[0] != "" {
-		base = strings.TrimRight(prefix[0], "/")
+	if opts.Prefix != "" {
+		base = strings.TrimRight(opts.Prefix, "/")
+	}
+	cop := http.NewCrossOriginProtection()
+	guard := func(c *context.Context) error {
+		if opts.Authorize == nil || !opts.Authorize(c) {
+			c.Abort()
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "Forbidden"})
+		}
+		if err := cop.Check(c.Request); err != nil {
+			c.Abort()
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "cross-origin request refused"})
+		}
+		return nil
 	}
 
 	d := DefaultQueue()
 
 	// Web UI Dashboard
-	r.Get(base+"/dashboard", func(c *context.Context) error {
+	r.Get(base+"/dashboard", guard, func(c *context.Context) error {
 		snap := d.metrics.Snapshot()
 		failedCount, _ := d.dlq.Count()
 
@@ -28,7 +65,7 @@ func MountDashboard(r router.RouteRegistrar, prefix ...string) {
 	})
 
 	// JSON APIs
-	r.Get(base+"/api/stats", func(c *context.Context) error {
+	r.Get(base+"/api/stats", guard, func(c *context.Context) error {
 		snap := d.metrics.Snapshot()
 		sizes := make(map[string]int64)
 		for _, q := range []string{"default", "high", "low"} {
@@ -45,7 +82,7 @@ func MountDashboard(r router.RouteRegistrar, prefix ...string) {
 		})
 	})
 
-	r.Get(base+"/api/failed", func(c *context.Context) error {
+	r.Get(base+"/api/failed", guard, func(c *context.Context) error {
 		jobs, err := d.dlq.All(50, 0)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -53,7 +90,7 @@ func MountDashboard(r router.RouteRegistrar, prefix ...string) {
 		return c.JSON(http.StatusOK, jobs)
 	})
 
-	r.Post(base+"/api/retry/:id", func(c *context.Context) error {
+	r.Post(base+"/api/retry/:id", guard, func(c *context.Context) error {
 		id := c.Param("id")
 		if err := d.RetryFailed(id); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -64,7 +101,7 @@ func MountDashboard(r router.RouteRegistrar, prefix ...string) {
 		})
 	})
 
-	r.Post(base+"/api/retry-all", func(c *context.Context) error {
+	r.Post(base+"/api/retry-all", guard, func(c *context.Context) error {
 		count, err := d.RetryAllFailed()
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -76,7 +113,7 @@ func MountDashboard(r router.RouteRegistrar, prefix ...string) {
 		})
 	})
 
-	r.Delete(base+"/api/failed/:id", func(c *context.Context) error {
+	r.Delete(base+"/api/failed/:id", guard, func(c *context.Context) error {
 		id := c.Param("id")
 		if err := d.dlq.Delete(id); err != nil {
 			return c.JSON(http.StatusNotFound, map[string]string{"error": err.Error()})
@@ -86,7 +123,7 @@ func MountDashboard(r router.RouteRegistrar, prefix ...string) {
 		})
 	})
 
-	r.Post(base+"/api/flush", func(c *context.Context) error {
+	r.Post(base+"/api/flush", guard, func(c *context.Context) error {
 		if err := d.dlq.Flush(); err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		}

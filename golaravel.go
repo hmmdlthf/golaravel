@@ -39,13 +39,13 @@ const Version = "v1.1.2"
 
 // Re-export core types for top-level framework ergonomics
 type (
-	Engine      = golaravel.Engine
-	Context     = context.Context
-	HandlerFunc = context.HandlerFunc
-	Route       = router.Route
-	RouteGroup  = router.RouteGroup
-	Validator   = validation.Validator
-	FormRequest = validation.FormRequest
+	Engine          = golaravel.Engine
+	Context         = context.Context
+	HandlerFunc     = context.HandlerFunc
+	Route           = router.Route
+	RouteGroup      = router.RouteGroup
+	Validator       = validation.Validator
+	FormRequest     = validation.FormRequest
 	ErrorBag        = validation.ErrorBag
 	Job             = queue.Job
 	Message         = mail.Message
@@ -186,10 +186,10 @@ func With2[T1 any, T2 any](p1, p2 string, handler func(c *context.Context, m1 T1
 var (
 	// Config provides access to environment and application settings
 	Config = struct {
-		Get         func(key, defaultValue string) string
-		GetInt      func(key string, defaultValue int) int
-		GetBool     func(key string, defaultValue bool) bool
-		LoadEnv     func(filenames ...string) error
+		Get     func(key, defaultValue string) string
+		GetInt  func(key string, defaultValue int) int
+		GetBool func(key string, defaultValue bool) bool
+		LoadEnv func(filenames ...string) error
 	}{
 		Get:     config.Get,
 		GetInt:  config.GetInt,
@@ -242,15 +242,18 @@ var (
 		Stop           func()
 		Default        func() *queue.Queue
 		MountDashboard func(r router.RouteRegistrar, prefix ...string)
+		// MountDashboardWith mounts the dashboard behind opts.Authorize.
+		MountDashboardWith func(r router.RouteRegistrar, opts queue.DashboardOptions)
 	}{
-		Push:           queue.Push,
-		Later:          queue.Later,
-		OnQueue:        queue.OnQueue,
-		RegisterJob:    queue.RegisterJobType,
-		StartWorkers:   queue.StartWorkers,
-		Stop:           queue.Stop,
-		Default:        queue.DefaultQueue,
-		MountDashboard: queue.MountDashboard,
+		Push:               queue.Push,
+		Later:              queue.Later,
+		OnQueue:            queue.OnQueue,
+		RegisterJob:        queue.RegisterJobType,
+		StartWorkers:       queue.StartWorkers,
+		Stop:               queue.Stop,
+		Default:            queue.DefaultQueue,
+		MountDashboard:     queue.MountDashboard,
+		MountDashboardWith: queue.MountDashboardWith,
 	}
 
 	// Events provides access to event dispatching
@@ -469,14 +472,14 @@ var (
 
 	// Privacy provides access to multi-tenancy isolation and soft delete scopes
 	Privacy = struct {
-		WithTenantID     func(ctx stdContext.Context, tenantID string) stdContext.Context
-		TenantFromContext func(ctx stdContext.Context) (string, bool)
+		WithTenantID          func(ctx stdContext.Context, tenantID string) stdContext.Context
+		TenantFromContext     func(ctx stdContext.Context) (string, bool)
 		MustTenantFromContext func(ctx stdContext.Context) string
-		WithBypassTenancy func(ctx stdContext.Context) stdContext.Context
-		WithTrashed      func(ctx stdContext.Context) stdContext.Context
-		OnlyTrashed      func(ctx stdContext.Context) stdContext.Context
-		WithForceDelete  func(ctx stdContext.Context) stdContext.Context
-		TenantMiddleware func(resolvers ...privacy.TenantResolver) context.HandlerFunc
+		WithBypassTenancy     func(ctx stdContext.Context) stdContext.Context
+		WithTrashed           func(ctx stdContext.Context) stdContext.Context
+		OnlyTrashed           func(ctx stdContext.Context) stdContext.Context
+		WithForceDelete       func(ctx stdContext.Context) stdContext.Context
+		TenantMiddleware      func(resolvers ...privacy.TenantResolver) context.HandlerFunc
 	}{
 		WithTenantID:          privacy.WithTenantID,
 		TenantFromContext:     privacy.TenantFromContext,
