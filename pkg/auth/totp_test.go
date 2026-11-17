@@ -144,3 +144,28 @@ func TestTOTP_RecoveryCodes(t *testing.T) {
 		t.Fatalf("invalid recovery code succeeded")
 	}
 }
+
+func TestTOTP_SkewDefaultWhenOptionsOmitIt(t *testing.T) {
+	now := time.Unix(1_800_000_015, 0)
+	for _, tc := range []struct {
+		name string
+		opts TOTPOptions
+		skew bool
+	}{
+		{"issuer only", TOTPOptions{Issuer: "Acme"}, true},
+		{"explicit 2", TOTPOptions{SkewWindow: 2}, true},
+		{"NoSkew", TOTPOptions{SkewWindow: NoSkew}, false},
+	} {
+		m := NewTOTPManager(tc.opts)
+		secret, _ := m.GenerateSecret()
+		prev, _ := m.GenerateCode(secret, now.Add(-30*time.Second))
+		next, _ := m.GenerateCode(secret, now.Add(30*time.Second))
+		cur, _ := m.GenerateCode(secret, now)
+		if !m.VerifyCode(secret, cur, now) {
+			t.Errorf("%s: current code refused", tc.name)
+		}
+		if m.VerifyCode(secret, prev, now) != tc.skew || m.VerifyCode(secret, next, now) != tc.skew {
+			t.Errorf("%s: neighbouring steps accepted=%v, want %v", tc.name, !tc.skew, tc.skew)
+		}
+	}
+}

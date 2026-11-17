@@ -25,11 +25,17 @@ var (
 
 // TOTPOptions configures time-based one-time password generation and verification.
 type TOTPOptions struct {
-	Issuer     string        // Application name (e.g. "GoLaravel")
-	Digits     int           // Length of TOTP code, typically 6
-	Period     time.Duration // Time-step duration, typically 30s
-	SkewWindow int           // Clock drift tolerance steps (1 allows -30s to +30s)
+	Issuer string        // Application name (e.g. "GoLaravel")
+	Digits int           // Length of TOTP code, typically 6
+	Period time.Duration // Time-step duration, typically 30s
+	// SkewWindow is the clock drift tolerance in steps (1 allows -30s to
+	// +30s). 0 keeps the default (1); use NoSkew to accept only the current
+	// step.
+	SkewWindow int
 }
+
+// NoSkew as TOTPOptions.SkewWindow accepts only the current time step.
+const NoSkew = -1
 
 // DefaultTOTPOptions provides standard RFC 6238 TOTP configuration.
 var DefaultTOTPOptions = TOTPOptions{
@@ -57,8 +63,11 @@ func NewTOTPManager(opts ...TOTPOptions) *TOTPManager {
 		if opts[0].Period > 0 {
 			o.Period = opts[0].Period
 		}
-		if opts[0].SkewWindow >= 0 {
+		switch {
+		case opts[0].SkewWindow > 0:
 			o.SkewWindow = opts[0].SkewWindow
+		case opts[0].SkewWindow < 0:
+			o.SkewWindow = 0
 		}
 	}
 	return &TOTPManager{opts: o}

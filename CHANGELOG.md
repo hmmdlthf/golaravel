@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.17.2] - 2026-11-17
+
+### Fixed
+- **TOTP clock-drift tolerance was off by default**: `NewTOTPManager(TOTPOptions{...})` with `SkewWindow` left out (as `WorkflowController` and gofilament do) took the zero value as "no tolerance", so only the current 30-second code worked and a phone clock a few seconds off, or a code typed just as it changed, was refused. `SkewWindow: 0` now keeps the default of one step either side; use the new `auth.NoSkew` to accept only the current step.
+
 ## [v1.17.1] - 2026-11-17
 
 ### Fixed
