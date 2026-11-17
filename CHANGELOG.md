@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.17.1] - 2026-11-17
+
+### Fixed
+- **`session.StartSession(mgr)` built the default manager**: it resolved `DefaultManager()` before looking at the manager passed in, so apps with their own manager still built the unused default and logged its "no SecretKey" warning. The default is now resolved on the first request, and only when no manager is given.
+- **Session CSRF check timing (`session.VerifyCSRFToken`)**: the token was compared with `!=`; it now uses a constant-time comparison (like `middleware.CSRF`) and refuses an empty session token.
+
 ## [v1.17.0] - 2026-11-17
 
 ### Added

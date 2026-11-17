@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"log/slog"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/golaravel/golaravel/pkg/context"
+	"github.com/golaravel/golaravel/pkg/golaravel"
 )
 
 func userPayload(uid string) []byte {
@@ -98,5 +102,21 @@ func TestDefaultManagerIsLazyAndUsesAppKey(t *testing.T) {
 	_ = DefaultManager()
 	if !bytes.Contains(buf.Bytes(), []byte("no SecretKey")) {
 		t.Fatal("missing warning when the default is used without a key")
+	}
+}
+
+func TestStartSessionWithManagerLeavesDefaultUnbuilt(t *testing.T) {
+	SetDefaultManager(nil)
+	defer SetDefaultManager(nil)
+	mgr := NewManager(Config{Driver: NewMemoryDriver(), SecretKey: "testing-secret-key-32-chars-long"})
+	app := golaravel.New()
+	app.Use(StartSession(mgr))
+	app.GET("/", func(c *context.Context) error { return c.String(200, "ok") })
+	app.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "/", nil))
+	globalMu.Lock()
+	built := globalManager != nil
+	globalMu.Unlock()
+	if built {
+		t.Fatal("StartSession(mgr) built the default session manager")
 	}
 }
