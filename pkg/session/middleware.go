@@ -1,6 +1,7 @@
 package session
 
 import (
+	"crypto/subtle"
 	"net/http"
 
 	"github.com/golaravel/golaravel/pkg/context"
@@ -9,13 +10,20 @@ import (
 // StartSession returns a middleware that initializes stateful session tracking for requests.
 // It loads existing session state from encrypted cookies or drivers, exposes the session on
 // the request context, and persists changes (along with flash aging) upon request completion.
+//
+// With no manager it uses DefaultManager, resolved on the first request, so
+// passing your own manager never builds (or warns about) the default one.
 func StartSession(manager ...*Manager) context.HandlerFunc {
-	mgr := DefaultManager()
-	if len(manager) > 0 && manager[0] != nil {
-		mgr = manager[0]
+	var given *Manager
+	if len(manager) > 0 {
+		given = manager[0]
 	}
 
 	return func(c *context.Context) error {
+		mgr := given
+		if mgr == nil {
+			mgr = DefaultManager()
+		}
 		sess := mgr.Start(c)
 		c.Set(contextManagerKey, mgr)
 
@@ -68,7 +76,7 @@ func VerifyCSRFToken() context.HandlerFunc {
 			token = c.Request.FormValue("_token")
 		}
 
-		if token == "" || token != expectedToken {
+		if token == "" || expectedToken == "" || subtle.ConstantTimeCompare([]byte(token), []byte(expectedToken)) != 1 {
 			c.AbortWithStatus(http.StatusForbidden)
 			return c.JSON(http.StatusForbidden, map[string]string{
 				"error":   "CSRF Token Mismatch",
