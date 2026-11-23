@@ -1,0 +1,20 @@
+{
+  "repo_url": "https://github.com/hmmdlthf/golaravel",
+  "min_version": "v1.0.0",
+  "changelog": "CHANGELOG.md",
+  "sections": [
+    {
+      "id": "overview",
+      "title": "Overview",
+      "file": "README.md",
+      "intro": true,
+      "drop": ["Comprehensive Documentation"]
+    },
+    {
+      "id": "guides",
+      "title": "Guides",
+      "glob": "docs/*.md",
+      "order": "docs/README.md"
+    }
+  ]
+}
