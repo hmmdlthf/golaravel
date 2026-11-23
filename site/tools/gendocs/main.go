@@ -526,6 +526,21 @@ func trimRules(s string) string {
 
 var parenRe = regexp.MustCompile(`\s*\([^)]*\)`)
 
+// isEmoji reports emoji and their joiners/selectors, but not other symbols
+// such as "⌘" or "→" that headings use as text.
+func isEmoji(r rune) bool {
+	switch {
+	case r >= 0x1F000 && r <= 0x1FAFF, // pictographs, emoticons, transport, flags
+		r >= 0x2600 && r <= 0x27BF,                         // misc symbols and dingbats (⚡ ✨ ✅)
+		r >= 0x2B00 && r <= 0x2BFF,                         // ⭐ ⬆
+		r == 0x231A, r == 0x231B, r == 0x2328, r == 0x23CF, // ⌚ ⌛ ⌨ ⏏ (⌘ stays)
+		r >= 0x23E9 && r <= 0x23F3, r >= 0x23F8 && r <= 0x23FA, // ⏩…⏳ ⏸ ⏹ ⏺
+		r == 0xFE0F, r == 0x200D, r == 0x20E3:
+		return true
+	}
+	return false
+}
+
 // prdRef is an internal spec reference in a heading: "(PRD §2.3)".
 var prdRef = regexp.MustCompile(`\s*\(PRD[^)]*\)`)
 
@@ -543,7 +558,7 @@ func cleanTitle(s string) string {
 	s = prdRef.ReplaceAllString(s, "")
 	// emoji anywhere in a heading ("Routing ⚡️", "Soft Deletes 🛡️ (...)")
 	s = strings.Map(func(r rune) rune {
-		if unicode.Is(unicode.So, r) || r == 0xFE0F || r == 0x200D {
+		if isEmoji(r) {
 			return -1
 		}
 		return r
