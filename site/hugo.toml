@@ -1,0 +1,47 @@
+baseURL = "https://golaravel.elridhma.com/"
+locale = "en"
+title = "GoLaravel"
+theme = "godocs"
+enableRobotsTXT = true
+disableKinds = ["taxonomy", "term", "rss"]
+
+[params]
+  description = "A full-stack web framework for Go with Laravel's ergonomics: zero-allocation routing, Templ views, Ent ORM, queues, auth and Flutter clients in one compiled binary."
+  tagline = "Laravel ergonomics at Go speed"
+  # license = "MIT" # SPDX id for the footer and structured data, once the repo has a LICENSE
+  repo = "https://github.com/hmmdlthf/golaravel"
+  # Shown in the header and footer next to this project.
+  [[params.related]]
+    name = "GoFilament"
+    url = "https://gofilament.elridhma.com/"
+    note = "Admin panels built on GoLaravel"
+
+[menus]
+  [[menus.main]]
+    name = "Docs"
+    pageRef = "/docs/latest"
+    weight = 10
+  [[menus.main]]
+    name = "Changelog"
+    pageRef = "/changelog"
+    weight = 20
+  [[menus.main]]
+    name = "GoFilament"
+    url = "https://gofilament.elridhma.com/"
+    weight = 30
+
+[markup]
+  [markup.goldmark.parser]
+    autoHeadingIDType = "github"
+    [markup.goldmark.parser.attribute]
+      block = true
+  [markup.highlight]
+    noClasses = false
+  [markup.tableOfContents]
+    startLevel = 2
+    endLevel = 3
+
+[outputs]
+  home = ["html"]
+  section = ["html"]
+  page = ["html"]

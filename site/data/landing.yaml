@@ -1,0 +1,83 @@
+# Landing page content (layouts live in themes/godocs).
+hero:
+  eyebrow: "Open source · Go 1.26"
+  title: "Laravel's ergonomics, compiled to Go."
+  lead: >-
+    GoLaravel is a full-stack web framework: a zero-allocation router, Templ
+    views, the Ent ORM, queues, scheduling, auth, mail and realtime, driven by
+    an Artisan CLI. Serve HTML, Inertia.js or a Flutter app from one binary.
+  install: "go install github.com/golaravel/golaravel/cmd/artisan@latest"
+  primary: { label: "Get started", url: "/docs/latest/guides/installation/" }
+  secondary: { label: "Read the docs", url: "/docs/latest/" }
+
+features_title: "Batteries included, nothing reflected"
+features:
+  - icon: "bolt"
+    title: "Zero-allocation routing"
+    text: "A radix-tree router with pooled request contexts: static routes match in about 9 ns, deep parameters in 28 ns, with no heap allocations."
+  - icon: "database"
+    title: "Ent ORM and Atlas"
+    text: "Schemas as Go code, type-safe queries and graph traversal without reflection, plus declarative migrations, factories and seeders."
+  - icon: "type"
+    title: "Templ views"
+    text: "Blade-style components compiled to Go: 0 allocations per render, about 25 times faster than html/template."
+  - icon: "phone"
+    title: "Flutter, Inertia or HTML"
+    text: "Pick a front end per project: a Flutter app for web, mobile and desktop, React or Vue through Inertia.js, or server-rendered Templ."
+  - icon: "shield"
+    title: "Auth and security"
+    text: "Session and JWT guards, Argon2id hashing, gates and policies, two-factor codes, OAuth sign-in, CSRF and rate limiting."
+  - icon: "queue"
+    title: "Queues and scheduling"
+    text: "In-memory or Redis workers with retries and a dead-letter queue, a worker dashboard, and a cron scheduler with overlap locks."
+  - icon: "mail"
+    title: "Mail and notifications"
+    text: "Mailables with Templ views and a preview studio, and notifications sent by mail, database, broadcast or your own channels."
+  - icon: "globe"
+    title: "Realtime and i18n"
+    text: "WebSocket and server-sent event broadcasting, plus translations and locale handling for every screen."
+  - icon: "terminal"
+    title: "Artisan CLI"
+    text: "artisan new scaffolds a project; make: commands write schemas, controllers, jobs, policies and views; serve, queue:work and schedule:work run it."
+
+quickstart:
+  title: "From zero to a running app"
+  lead: "Install the CLI, create a project, and add your first routes."
+  steps:
+    - title: "Install Artisan"
+      code: |
+        go install github.com/golaravel/golaravel/cmd/artisan@latest
+      lang: "bash"
+    - title: "Create a project"
+      lang: "bash"
+      code: |
+        artisan new my-app   # pick Templ, Inertia, Flutter or Hybrid
+        cd my-app
+        artisan generate
+        artisan serve        # http://localhost:8080
+    - title: "Add routes"
+      lang: "go"
+      code: |
+        app := golaravel.Default()
+
+        app.GET("/api/ping", func(c *golaravel.Context) error {
+            return c.JSON(200, map[string]string{"status": "ok"})
+        })
+
+        app.GET("/posts/{slug}", func(c *golaravel.Context) error {
+            return c.String(200, "Post: %s", c.Param("slug"))
+        })
+
+        app.Run(":8080")
+
+engines:
+  title: "One backend, your choice of front end"
+  items:
+    - title: "Templ"
+      text: "Server-rendered HTML from compiled components, for public pages, invoices and anything that should load with no JavaScript."
+    - title: "Inertia.js"
+      text: "React or Vue pages fed straight from your controllers, with no separate API to build."
+    - title: "Flutter"
+      text: "One Flutter client for web, Android, iOS and desktop, served by the same binary; or Hybrid, with Templ for the public pages."
+
+closing: "Build your next app in Go."
