@@ -116,6 +116,7 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - 🛑 **[Sliding-Window Rate Limiter & Tiered Throttling](./docs/rate-limiting-and-throttling.md)**
 - 📡 **[Realtime WebSockets & SSE Broadcasting](./docs/realtime-broadcasting.md)**
 - 🔔 **[Multi-Channel Notifications Engine](./docs/notifications.md)**
+- 💳 **[Payment Gateways & Gateway Plugins (Stripe, PayHere, OnePay, Tabby, Tamara)](./docs/payment-gateways.md)**
 - ⚡ **[Tagged Cache Engine & Atomic Locks](./docs/tagged-cache-and-locks.md)**
 - ☁️ **[Cloud Filesystem (S3, MinIO, Local Disk) & Presigned URLs](./docs/cloud-storage-and-s3.md)**
 - 🧪 **[Full-Stack HTTP Testing Harness & Assertion Toolkit](./docs/testing.md)**

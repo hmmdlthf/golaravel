@@ -131,37 +131,43 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
     - Asynchronous Queued Notifications (`ShouldQueue`)
     - Generator Command (`artisan make:notification`)
 
-20. **[Tagged Cache Engine & Atomic Locks (PRD §7)](./tagged-cache-and-locks.md)**
+20. **[Payment Gateways & Gateway Plugins (pkg/payment)](./payment-gateways.md)**
+    - One API for any gateway: checkout, verified webhooks, refunds, captures, payment history
+    - Built-in Stripe, PayHere, OnePay, Tabby, Tamara and test gateway drivers
+    - Encrypted per-gateway settings with a schema admin panels can render
+    - Writing your own gateway plugin (`payment.Driver`)
+
+21. **[Tagged Cache Engine & Atomic Locks (PRD §7)](./tagged-cache-and-locks.md)**
     - O(1) Tagged Cache Invalidation (`Cache.Tags(...)`)
     - Distributed & In-Process Atomic Locks (`Cache.Lock(...)`)
     - Automatic Lock Expiration & Auto-Release (`Lock.Get`, `Lock.Block`)
 
-21. **[Cloud Filesystem & Presigned URLs (PRD §7)](./cloud-storage-and-s3.md)**
+22. **[Cloud Filesystem & Presigned URLs (PRD §7)](./cloud-storage-and-s3.md)**
     - Multi-Disk Registry (`local`, `public`, `s3`, `minio`)
     - Zero-External-SDK AWS Signature Version 4 (SigV4) Engine
     - Time-Limited Presigned URLs (`TemporaryURL`, `PresignedPutURL`)
     - Direct Client Uploads & Multipart Form Helpers (`c.FormFile`, `c.SaveUploadedFile`)
 
-22. **[HTTP Testing Harness & Assertion Toolkit (PRD §5)](./testing.md)**
+23. **[HTTP Testing Harness & Assertion Toolkit (PRD §5)](./testing.md)**
     - Zero-Network Direct In-Memory Pipeline Execution (`app.Test(t)`)
     - Fluent Request Builder (`WithToken`, `WithJSON`, `WithForm`, `WithFile`)
     - Deep JSON Path, Predicate, and Error Bag Assertions
     - HTML & View Assertions (`AssertSee`, `AssertDontSee`, `AssertSeeInOrder`)
 
-23. **[Fluent HTTP Client & Mocking Engine (PRD §7)](./fluent-http-client.md)**
+24. **[Fluent HTTP Client & Mocking Engine (PRD §7)](./fluent-http-client.md)**
     - Expressive Request Chaining (`WithToken`, `WithHeaders`, `Timeout`, `Retry`)
     - Automatic JSON, Form, and Multipart File (`Attach`) Uploads
     - Comprehensive Mocking Engine (`Http.Fake()`, Sequences, Wildcards)
     - Test Assertions (`AssertSent`, `AssertSentCount`, `AssertNothingSent`)
 
-24. **[Prometheus, OpenTelemetry & Health Check Engine (PRD §9)](./telemetry-and-health-checks.md)**
+25. **[Prometheus, OpenTelemetry & Health Check Engine (PRD §9)](./telemetry-and-health-checks.md)**
     - Prometheus Metrics Exposition (`/metrics`) with Go Runtime Statistics
     - OpenTelemetry Distributed Tracing & W3C Trace Context Propagation (`traceparent`)
     - Multi-Subsystem Health Probes (`/health`, `/livez`, `/readyz`)
     - HTTP Observability Middlewares (`MetricsMiddleware`, `TraceMiddleware`)
     - Terminal Health Dashboard (`artisan health`)
 
-25. **[Localization & Translation Guide (pkg/translation)](./localization-and-translation.md)**
+26. **[Localization & Translation Guide (pkg/translation)](./localization-and-translation.md)**
     - JSON Dictionaries (`lang/{locale}/{group}.json` and `lang/{locale}.json`)
     - Laravel-Style Parameter Interpolation (`:name`, `:Name`, `:NAME`)
     - Pluralization / Choice (`apple|apples`, `{0}`, `[1,5]`)
@@ -169,13 +175,13 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
     - Request Context Helpers (`c.Trans()`, `c.TransChoice()`, `c.GetLocale()`)
     - Scaffolder Command (`artisan make:lang <locale>`)
 
-26. **[Artisan CLI Reference](./artisan-cli.md)**
+27. **[Artisan CLI Reference](./artisan-cli.md)**
     - Project Creation (`artisan new`)
     - Full-Stack CRUD Scaffolder (`artisan make:crud <Name>`) (PRD §8.2)
     - Database Migrations & Seeding (`migrate`, `migrate:diff`, `db:seed`, etc.)
     - Generator Commands (`make:crud`, `make:schema`, `make:controller`, `make:job`, `make:factory`, `make:seeder`, `make:lang`, `make:notification`, `make:limiter`, `make:scope`, etc.)
     - Build & Lifecycle Commands (`generate`, `flutter:build`, `serve`, `health`)
 
-27. **[Performance & Benchmarks](./benchmarks.md)**
+28. **[Performance & Benchmarks](./benchmarks.md)**
     - Zero-Allocation Architecture Methodology
     - Micro-benchmark Results vs Gin, Fiber, and Laravel Octane
