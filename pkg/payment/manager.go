@@ -492,11 +492,21 @@ func (m *Manager) HandleWebhook(ctx context.Context, gatewayID string, r *http.R
 	if upd == nil || upd.Ignore {
 		return nil, nil
 	}
-	p, err := m.find(ctx, gatewayID, upd)
-	if err != nil {
+	if upd.Method == nil && upd.Subscription == nil {
+		p, err := m.find(ctx, gatewayID, upd)
+		if err != nil {
+			return nil, err
+		}
+		return m.apply(ctx, p.ID, upd, "webhook")
+	}
+	if err := m.applyUpdate(ctx, gatewayID, upd, "webhook"); err != nil {
 		return nil, err
 	}
-	return m.apply(ctx, p.ID, upd, "webhook")
+	if upd.hasPayment() {
+		p, _ := m.find(ctx, gatewayID, upd)
+		return p, nil
+	}
+	return nil, nil
 }
 
 // HandleReturn runs when the customer comes back from the gateway. The

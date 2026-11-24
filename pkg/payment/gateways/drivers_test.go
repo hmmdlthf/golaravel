@@ -95,7 +95,7 @@ func TestAllDriversInstalled(t *testing.T) {
 			t.Errorf("%s needs a description and fields", d.Name)
 		}
 	}
-	if got := strings.Join(names, ","); got != "onepay,payhere,stripe,tabby,tamara,test" {
+	if got := strings.Join(names, ","); got != "onepay,payhere,paypal,stripe,tabby,tamara,test" {
 		t.Fatalf("drivers %s", got)
 	}
 }

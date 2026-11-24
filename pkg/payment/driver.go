@@ -82,6 +82,12 @@ type Features struct {
 	Cancel         bool `json:"cancel"`
 	StatusLookup   bool `json:"status_lookup"`
 	Installments   bool `json:"installments"` // buy now, pay later
+	// Preapproval: saves payment methods (Preapprover).
+	Preapproval bool `json:"preapproval"`
+	// Charging: charges saved methods without the customer (Charger).
+	Charging bool `json:"charging"`
+	// Subscriptions: runs recurring billing at the gateway (Subscriber).
+	Subscriptions bool `json:"subscriptions"`
 }
 
 // Config is what a driver gets to build a Gateway.

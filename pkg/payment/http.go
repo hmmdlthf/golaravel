@@ -23,7 +23,27 @@ func (m *Manager) Handlers() Handlers { return Handlers{m} }
 
 // Pay sends the customer to the gateway: GET {prefix}/{payment}/pay.
 func (h Handlers) Pay(c *gcontext.Context) error {
-	p, err := h.m.Payment(c.Context(), c.Param("payment"))
+	id := c.Param("payment")
+	if k := Kind(id); k == "method" || k == "subscription" {
+		var act *Action
+		pending := false
+		if k == "method" {
+			if pm, err := h.m.store.Method(c.Context(), id); err == nil {
+				act, pending = pm.Action, pm.Status == MethodPending
+			}
+		} else if sub, err := h.m.store.Subscription(c.Context(), id); err == nil {
+			act, pending = sub.Action, sub.Status == SubPending
+		}
+		if act == nil || !pending {
+			dest, err := h.m.handleRecordReturn(c.Context(), id, "", c.Request)
+			if err != nil {
+				return c.String(http.StatusNotFound, "Not found")
+			}
+			return c.Redirect(http.StatusSeeOther, dest)
+		}
+		return WriteAction(&c.Response, c.Request, act)
+	}
+	p, err := h.m.Payment(c.Context(), id)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Payment not found")
 	}
@@ -37,6 +57,13 @@ func (h Handlers) Pay(c *gcontext.Context) error {
 // Return is where the gateway sends the customer back:
 // GET or POST {prefix}/{payment}/return?result=success|cancel|failure.
 func (h Handlers) Return(c *gcontext.Context) error {
+	if k := Kind(c.Param("payment")); k == "method" || k == "subscription" {
+		dest, err := h.m.handleRecordReturn(c.Context(), c.Param("payment"), c.Query("result"), c.Request)
+		if err != nil {
+			return c.String(http.StatusNotFound, "Not found")
+		}
+		return c.Redirect(http.StatusSeeOther, dest)
+	}
 	_, dest, err := h.m.HandleReturn(c.Context(), c.Param("payment"), c.Query("result"), c.Request)
 	if err != nil {
 		return c.String(http.StatusNotFound, "Payment not found")

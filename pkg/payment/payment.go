@@ -113,15 +113,19 @@ type Payment struct {
 	Description string `json:"description,omitempty"`
 	// GatewayRef is the gateway's own id for the payment (a Stripe Checkout
 	// Session, a Tabby payment, a Tamara order...).
-	GatewayRef    string            `json:"gateway_ref,omitempty"`
-	CustomerName  string            `json:"customer_name,omitempty"`
-	CustomerEmail string            `json:"customer_email,omitempty"`
-	CustomerPhone string            `json:"customer_phone,omitempty"`
-	SuccessURL    string            `json:"success_url,omitempty"`
-	CancelURL     string            `json:"cancel_url,omitempty"`
-	Action        *Action           `json:"action,omitempty"`
-	FailureReason string            `json:"failure_reason,omitempty"`
-	Metadata      map[string]string `json:"metadata,omitempty"`
+	GatewayRef    string `json:"gateway_ref,omitempty"`
+	CustomerName  string `json:"customer_name,omitempty"`
+	CustomerEmail string `json:"customer_email,omitempty"`
+	CustomerPhone string `json:"customer_phone,omitempty"`
+	// SubscriptionID links a renewal to its subscription.
+	SubscriptionID string `json:"subscription_id,omitempty"`
+	// PaymentMethodID is the saved method a merchant-initiated charge used.
+	PaymentMethodID string            `json:"payment_method_id,omitempty"`
+	SuccessURL      string            `json:"success_url,omitempty"`
+	CancelURL       string            `json:"cancel_url,omitempty"`
+	Action          *Action           `json:"action,omitempty"`
+	FailureReason   string            `json:"failure_reason,omitempty"`
+	Metadata        map[string]string `json:"metadata,omitempty"`
 	// Data is driver-owned state (for example a capture id) kept between calls.
 	Data      map[string]string `json:"data,omitempty"`
 	Mode      Mode              `json:"mode"`
@@ -275,6 +279,15 @@ type Update struct {
 	// Ignore means the notification was genuine but says nothing new (a
 	// gateway event the manager does not track); it is acknowledged.
 	Ignore bool
+	// Method reports a saved payment method (a preapproval result).
+	Method *MethodUpdate
+	// Subscription reports a subscription change and, optionally, a
+	// renewal payment.
+	Subscription *SubscriptionUpdate
+}
+
+func (u *Update) hasPayment() bool {
+	return u.Status != "" && (u.PaymentID != "" || u.GatewayRef != "")
 }
 
 // RefundResult is a driver's answer to a refund.

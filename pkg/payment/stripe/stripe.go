@@ -32,12 +32,12 @@ func Driver() *payment.Driver {
 		Description: "Cards, Apple Pay, Google Pay and local methods through Stripe Checkout.",
 		Website:     "https://stripe.com",
 		Features: payment.Features{Refunds: true, PartialRefunds: true, Capture: true, Cancel: true,
-			StatusLookup: true},
+			StatusLookup: true, Preapproval: true, Charging: true, Subscriptions: true},
 		Fields: []payment.Field{
 			{Name: "secret_key", Label: "Secret key", Type: payment.FieldSecret, Required: true,
 				Placeholder: "sk_test_…", Help: "Developers → API keys. Use a restricted key with Checkout, Payment Intents and Refunds write access."},
 			{Name: "webhook_secret", Label: "Webhook signing secret", Type: payment.FieldSecret, Required: true,
-				Placeholder: "whsec_…", Help: "Developers → Webhooks → add the endpoint shown on this gateway; send checkout.session.*, payment_intent.* and charge.refunded."},
+				Placeholder: "whsec_…", Help: "Developers → Webhooks → add the endpoint shown on this gateway; send checkout.session.*, payment_intent.*, charge.refunded, invoice.paid, invoice.payment_failed and customer.subscription.*."},
 			{Name: "capture", Label: "Capture", Type: payment.FieldSelect, Default: "automatic",
 				Options: map[string]string{"automatic": "Charge straight away", "manual": "Authorize, capture later"}},
 			{Name: "payment_methods", Label: "Payment methods", Type: payment.FieldText,
@@ -77,6 +77,10 @@ type session struct {
 	ClientRef     string `json:"client_reference_id"`
 	PaymentIntent any    `json:"payment_intent"` // id string, or an expanded object
 	Metadata      map[string]string
+	Mode          string `json:"mode"` // payment, setup, subscription
+	SetupIntent   any    `json:"setup_intent"`
+	Subscription  any    `json:"subscription"`
+	Customer      any    `json:"customer"`
 }
 
 func (s *session) intentID() string {
@@ -228,7 +232,7 @@ func (g *Gateway) FetchStatus(ctx context.Context, p *payment.Payment) (*payment
 }
 
 // ParseWebhook verifies the Stripe-Signature header and reads the event.
-func (g *Gateway) ParseWebhook(_ context.Context, r *http.Request, body []byte) (*payment.Update, error) {
+func (g *Gateway) ParseWebhook(ctx context.Context, r *http.Request, body []byte) (*payment.Update, error) {
 	if err := VerifySignature(body, r.Header.Get("Stripe-Signature"), g.whsec, time.Now()); err != nil {
 		return nil, err
 	}
@@ -241,6 +245,13 @@ func (g *Gateway) ParseWebhook(_ context.Context, r *http.Request, body []byte) 
 	}
 	if err := json.Unmarshal(body, &ev); err != nil {
 		return nil, payment.ErrInvalidSignature
+	}
+	if u, handled, err := g.recurringEvent(ctx, ev.Type, ev.Data.Object); handled {
+		if err != nil {
+			return nil, err
+		}
+		u.EventID, u.Event = ev.ID, ev.Type
+		return u, nil
 	}
 	var u *payment.Update
 	switch {

@@ -4,7 +4,7 @@
 //	mgr := payment.NewManager(payment.Options{BaseURL: "https://shop.example.com", Store: store, Encrypter: enc})
 //	app.RegisterProvider(gateways.Provider(mgr))
 //
-// The provider installs Stripe, PayHere, OnePay, Tabby, Tamara and the test
+// The provider installs Stripe, PayPal, PayHere, OnePay, Tabby, Tamara and the test
 // gateway, puts the manager in the container and mounts the payment routes.
 // Third-party drivers are registered the same way: mgr.RegisterDriver(d).
 package gateways
@@ -15,6 +15,7 @@ import (
 	"github.com/golaravel/golaravel/pkg/payment"
 	"github.com/golaravel/golaravel/pkg/payment/onepay"
 	"github.com/golaravel/golaravel/pkg/payment/payhere"
+	"github.com/golaravel/golaravel/pkg/payment/paypal"
 	"github.com/golaravel/golaravel/pkg/payment/stripe"
 	"github.com/golaravel/golaravel/pkg/payment/tabby"
 	"github.com/golaravel/golaravel/pkg/payment/tamara"
@@ -23,7 +24,7 @@ import (
 // Defaults returns the built-in drivers.
 func Defaults() []*payment.Driver {
 	return []*payment.Driver{
-		stripe.Driver(), payhere.Driver(), onepay.Driver(), tabby.Driver(), tamara.Driver(), payment.TestDriver(),
+		stripe.Driver(), paypal.Driver(), payhere.Driver(), onepay.Driver(), tabby.Driver(), tamara.Driver(), payment.TestDriver(),
 	}
 }
 

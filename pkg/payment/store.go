@@ -54,10 +54,12 @@ type PaymentQuery struct {
 	GatewayID string
 	Reference string
 	Mode      Mode
-	Sort      string // created_at (default), amount, status
-	Desc      bool
-	Page      int // from 1
-	PerPage   int
+	// SubscriptionID lists a subscription's renewals.
+	SubscriptionID string
+	Sort           string // created_at (default), amount, status
+	Desc           bool
+	Page           int // from 1
+	PerPage        int
 }
 
 // Store persists gateways, payments and their history.
@@ -78,8 +80,24 @@ type Store interface {
 	AddLog(ctx context.Context, l *Log) error
 	Logs(ctx context.Context, paymentID string) ([]*Log, error)
 	// SeenEvent reports whether a gateway event id was already processed
-	// for the payment.
+	// for the payment (or method, or subscription: logs are keyed by any id).
 	SeenEvent(ctx context.Context, paymentID, eventID string) (bool, error)
+
+	CreateMethod(ctx context.Context, m *PaymentMethod) error
+	// UpdateMethod saves m if its Version matches, then increments it.
+	UpdateMethod(ctx context.Context, m *PaymentMethod) error
+	Method(ctx context.Context, id string) (*PaymentMethod, error)
+	Methods(ctx context.Context, q MethodQuery) ([]*PaymentMethod, int, error)
+
+	CreateSubscription(ctx context.Context, s *Subscription) error
+	// UpdateSubscription saves s if its Version matches, then increments it.
+	UpdateSubscription(ctx context.Context, s *Subscription) error
+	Subscription(ctx context.Context, id string) (*Subscription, error)
+	SubscriptionByGatewayRef(ctx context.Context, gatewayID, ref string) (*Subscription, error)
+	Subscriptions(ctx context.Context, q SubscriptionQuery) ([]*Subscription, int, error)
+	// DueSubscriptions lists manager-billed subscriptions (active or past
+	// due) whose next billing time has come.
+	DueSubscriptions(ctx context.Context, now time.Time, limit int) ([]*Subscription, error)
 }
 
 // MemoryStore keeps everything in memory: tests, demos, single-process apps
@@ -89,11 +107,14 @@ type MemoryStore struct {
 	gateways map[string]*GatewayConfig
 	payments map[string]*Payment
 	logs     map[string][]*Log
+	methods  map[string]*PaymentMethod
+	subs     map[string]*Subscription
 }
 
 // NewMemoryStore creates an empty store.
 func NewMemoryStore() *MemoryStore {
-	return &MemoryStore{gateways: map[string]*GatewayConfig{}, payments: map[string]*Payment{}, logs: map[string][]*Log{}}
+	return &MemoryStore{gateways: map[string]*GatewayConfig{}, payments: map[string]*Payment{}, logs: map[string][]*Log{},
+		methods: map[string]*PaymentMethod{}, subs: map[string]*Subscription{}}
 }
 
 func (s *MemoryStore) SaveGateway(_ context.Context, g *GatewayConfig) error {
@@ -193,6 +214,7 @@ func (s *MemoryStore) Payments(_ context.Context, q PaymentQuery) ([]*Payment, i
 		if q.Status != "" && p.Status != q.Status ||
 			q.GatewayID != "" && p.GatewayID != q.GatewayID ||
 			q.Reference != "" && p.Reference != q.Reference ||
+			q.SubscriptionID != "" && p.SubscriptionID != q.SubscriptionID ||
 			q.Mode != "" && p.Mode != q.Mode {
 			continue
 		}

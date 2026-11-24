@@ -33,13 +33,14 @@ func Driver() *payment.Driver {
 		Website:     "https://www.payhere.lk",
 		Countries:   []string{"LK"},
 		Currencies:  []string{"LKR", "USD", "GBP", "EUR", "AUD"},
-		Features:    payment.Features{Refunds: true, PartialRefunds: true, StatusLookup: true},
+		Features: payment.Features{Refunds: true, PartialRefunds: true, StatusLookup: true,
+			Preapproval: true, Charging: true, Subscriptions: true},
 		Fields: []payment.Field{
 			{Name: "merchant_id", Label: "Merchant ID", Type: payment.FieldText, Required: true},
 			{Name: "merchant_secret", Label: "Merchant secret", Type: payment.FieldSecret, Required: true,
 				Help: "Settings → Domains & Credentials. The secret is issued per domain: add this site's domain first."},
 			{Name: "app_id", Label: "Business app ID", Type: payment.FieldText,
-				Help: "Optional. Settings → API Keys → create a business app with Payment Retrieval and Refund. Needed for refunds and status checks."},
+				Help: "Optional. Settings → API Keys → create a business app with Payment Retrieval, Refund, Charging and Subscription Manager. Needed for refunds, status checks, charging saved cards and managing subscriptions."},
 			{Name: "app_secret", Label: "Business app secret", Type: payment.FieldSecret},
 			{Name: "base_url", Label: "Base URL", Type: payment.FieldText, Help: "Leave blank. For tests and proxies."},
 		},
@@ -157,6 +158,9 @@ func (g *Gateway) ParseWebhook(_ context.Context, _ *http.Request, body []byte) 
 		v.Get("status_code"), g.cfg.Get("merchant_secret"))
 	if subtle.ConstantTimeCompare([]byte(strings.ToUpper(v.Get("md5sig"))), []byte(want)) != 1 {
 		return nil, payment.ErrInvalidSignature
+	}
+	if k := payment.Kind(v.Get("order_id")); k == "method" || k == "subscription" {
+		return g.recordNotify(v), nil
 	}
 	st, reason, ok := status(v.Get("status_code"))
 	if !ok {
