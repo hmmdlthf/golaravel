@@ -19,8 +19,16 @@ const (
 )
 
 // CSRF provides Cross-Site Request Forgery protection using Double Submit Cookie pattern.
-func CSRF() context.HandlerFunc {
+//
+// Paths listed in except skip the check: an entry ending in "*" matches the
+// prefix before it, any other entry the exact path. Use it for endpoints
+// that third parties post to, such as payment gateway webhooks
+// (CSRF("/payments/webhooks/*")).
+func CSRF(except ...string) context.HandlerFunc {
 	return func(c *context.Context) error {
+		if csrfExempt(c.Request.URL.Path, except) {
+			return c.Next()
+		}
 		// Try to read existing cookie
 		var token string
 		if cookie, err := c.Request.Cookie(CSRFCookieName); err == nil && cookie.Value != "" {
@@ -70,6 +78,19 @@ func CSRF() context.HandlerFunc {
 
 		return c.Next()
 	}
+}
+
+func csrfExempt(path string, except []string) bool {
+	for _, e := range except {
+		if prefix, ok := strings.CutSuffix(e, "*"); ok {
+			if strings.HasPrefix(path, prefix) {
+				return true
+			}
+		} else if path == e {
+			return true
+		}
+	}
+	return false
 }
 
 // Token retrieves the current CSRF token from the context.

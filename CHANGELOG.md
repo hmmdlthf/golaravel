@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.18.0] - 2026-11-24
+
+### Added
+- **Payment gateways (`pkg/payment`)**: one payment API with gateway drivers as plugins. The manager creates payments and sends customers to the gateway (redirect, auto-posted form or client secret). It confirms return visits and verifies webhooks through the driver, moves payments through a state machine that ignores stale and duplicate notifications, and handles refunds, captures, voids and status sync. Status changes fire `payment.*` events. Gateway settings follow each driver's schema, with secret fields encrypted at rest. `MemoryStore` and `SQLStore` (SQLite, MySQL, Postgres) are included.
+- **Built-in gateway drivers**: Stripe (`pkg/payment/stripe`), PayPal (`paypal`), PayHere (`payhere`), OnePay (`onepay`), Tabby (`tabby`), Tamara (`tamara`) and a no-account test gateway. `gateways.Provider(mgr)` installs them and mounts the `/payments` routes.
+- **Saved cards, charging and subscriptions**: `SavePaymentMethod` (preapproval) and `Charge` (merchant-initiated charges on a saved card). `Subscribe` runs subscriptions either through the gateway (PayHere Recurring, Stripe Billing, PayPal Billing) or billed by the manager on a saved card with `RunDueSubscriptions`, which retries declines. Also `CancelSubscription`, `RetrySubscription`, `SyncSubscription`, renewals recorded as payments, `subscription.*` and `payment_method.*` events, and SQL tables for both.
+- **`middleware.CSRF(except...)`**: paths to skip, exact or with a trailing `*` for a prefix, for third-party POSTs such as gateway webhooks.
+
 ## [v1.17.2] - 2026-11-17
 
 ### Fixed

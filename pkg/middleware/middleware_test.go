@@ -92,6 +92,21 @@ func TestCSRFRejectsWrongToken(t *testing.T) {
 	}
 }
 
+func TestCSRFExceptPaths(t *testing.T) {
+	mw := CSRF("/payments/webhooks/*", "/hook")
+	for path, want := range map[string]int{
+		"/payments/webhooks/stripe": http.StatusOK,
+		"/hook":                     http.StatusOK,
+		"/hook/more":                http.StatusForbidden,
+		"/payments/other":           http.StatusForbidden,
+	} {
+		r := httptest.NewRequest("POST", "http://example.com"+path, strings.NewReader("{}"))
+		if rec := run(t, r, mw); rec.Code != want {
+			t.Errorf("%s: %d, want %d", path, rec.Code, want)
+		}
+	}
+}
+
 func TestRateLimiterUsesClientIP(t *testing.T) {
 	mw := RateLimiter(1)
 	// Two clients behind the same local proxy must not share a bucket.
