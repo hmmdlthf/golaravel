@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.18.0] - 2026-11-24
 
 ### Added
 - **Payment gateways (`pkg/payment`)**: one payment API with gateway drivers as plugins. The manager creates payments and sends customers to the gateway (redirect, auto-posted form or client secret). It confirms return visits and verifies webhooks through the driver, moves payments through a state machine that ignores stale and duplicate notifications, and handles refunds, captures, voids and status sync. Status changes fire `payment.*` events. Gateway settings follow each driver's schema, with secret fields encrypted at rest. `MemoryStore` and `SQLStore` (SQLite, MySQL, Postgres) are included.
