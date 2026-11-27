@@ -1,6 +1,6 @@
 /// The server answered with an error status.
 class GoLaravelHttpError implements Exception {
-  GoLaravelHttpError(this.status, this.code, [this.message = '']);
+  GoLaravelHttpError(this.status, this.code, [this.message = '', this.retryAfter]);
 
   /// HTTP status code.
   final int status;
@@ -8,6 +8,9 @@ class GoLaravelHttpError implements Exception {
   /// The `error` field of the JSON body, or "http_error".
   final String code;
   final String message;
+
+  /// Seconds, from the Retry-After header.
+  final int? retryAfter;
 
   /// Worth retrying later: overload, maintenance, rate limits.
   bool get transient => status >= 500 || status == 429 || status == 408;
