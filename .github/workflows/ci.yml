@@ -74,9 +74,17 @@ jobs:
         env:
           GOLARAVEL_E2E: "1"
       - name: Web (Chrome) - WASM SQLite storage, WebCrypto key vault, logic
+        timeout-minutes: 10
         run: |
           ./tool/web_test_assets.sh
-          flutter test --platform chrome test/web_storage_test.dart test/web_key_vault_test.dart test/web_logic_test.dart test/features_test.dart test/native_key_vault_test.dart
+          # Ubuntu 24.04 runners block the user namespaces Chrome's sandbox
+          # needs: Chrome starts but its renderers never do, and flutter test
+          # waits forever. The sandbox adds nothing in a throwaway runner.
+          printf '#!/bin/sh\nexec google-chrome --no-sandbox "$@"\n' > "$RUNNER_TEMP/chrome"
+          chmod +x "$RUNNER_TEMP/chrome"
+          CHROME_EXECUTABLE="$RUNNER_TEMP/chrome" flutter test --platform chrome -r expanded \
+            test/web_storage_test.dart test/web_key_vault_test.dart test/web_logic_test.dart \
+            test/features_test.dart test/native_key_vault_test.dart
 
   integration:
     name: Integration (MySQL, Postgres, Redis)
