@@ -74,3 +74,63 @@ func TestTenantSQLInterceptor_UnsupportedQueryFailsClosed(t *testing.T) {
 		t.Fatalf("err=%v, want ErrTenantScopeUnsupported", err)
 	}
 }
+
+func TestTenantMutationHook_GeneratedEnt(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:tenant_hook?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	client.Note.Use(privacy.TenantMutationHook())
+
+	bg := context.Background()
+	ctxA := privacy.WithTenantID(bg, "tenant-a")
+	ctxB := privacy.WithTenantID(bg, "tenant-b")
+
+	a := client.Note.Create().SetTitle("a1").SaveX(ctxA)
+	if a.TenantID != "tenant-a" {
+		t.Fatalf("create tenant = %q, want tenant-a", a.TenantID)
+	}
+	if n := client.Note.Update().Where(note.ID(a.ID)).SetTitle("hacked").SaveX(ctxB); n != 0 {
+		t.Fatalf("tenant-b updated %d of tenant-a's notes", n)
+	}
+	if n := client.Note.Delete().Where(note.ID(a.ID)).ExecX(ctxB); n != 0 {
+		t.Fatalf("tenant-b deleted %d of tenant-a's notes", n)
+	}
+	if n := client.Note.Update().SetTitle("mine").SaveX(ctxA); n != 1 {
+		t.Fatalf("tenant-a updated %d notes, want 1", n)
+	}
+}
+
+// bareMutation is an ent.Mutation without WhereP whose SetField fails, as it
+// does for a schema without the tenant column.
+type bareMutation struct {
+	ent.Mutation
+	op ent.Op
+}
+
+func (m bareMutation) Op() ent.Op                     { return m.op }
+func (bareMutation) Field(string) (ent.Value, bool)   { return nil, false }
+func (bareMutation) SetField(string, ent.Value) error { return errors.New("unknown field") }
+
+// A mutation the hook cannot scope must fail, never run unscoped.
+func TestTenantMutationHook_UnsupportedMutationFailsClosed(t *testing.T) {
+	ran := false
+	mut := privacy.TenantMutationHook()(ent.MutateFunc(func(context.Context, ent.Mutation) (ent.Value, error) {
+		ran = true
+		return nil, nil
+	}))
+	ctx := privacy.WithTenantID(context.Background(), "tenant-a")
+
+	cases := map[string]ent.Mutation{
+		"update without WhereP":      bareMutation{op: ent.OpUpdate},
+		"delete-one without WhereP":  bareMutation{op: ent.OpDeleteOne},
+		"create with SetField error": bareMutation{op: ent.OpCreate},
+	}
+	for name, m := range cases {
+		ran = false
+		if _, err := mut.Mutate(ctx, m); !errors.Is(err, privacy.ErrTenantScopeUnsupported) {
+			t.Errorf("%s: err=%v, want ErrTenantScopeUnsupported", name, err)
+		}
+		if ran {
+			t.Errorf("%s: mutation ran unscoped", name)
+		}
+	}
+}

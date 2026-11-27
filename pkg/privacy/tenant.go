@@ -101,6 +101,8 @@ func applySelectorPredicate(q ent.Query, p func(*sql.Selector)) error {
 // On OpCreate, it automatically populates tenant_id from the context if not set, or verifies
 // that any provided tenant_id matches the active context tenant.
 // On OpUpdate/OpDelete, it appends a WHERE tenant_id = ? clause to prevent cross-tenant mutations.
+// It fails closed: a mutation it cannot set the tenant on (create) or scope
+// (update/delete) is refused with ErrTenantScopeUnsupported instead of running.
 func TenantMutationHook(columnName ...string) ent.Hook {
 	col := "tenant_id"
 	if len(columnName) > 0 && columnName[0] != "" {
@@ -110,10 +112,6 @@ func TenantMutationHook(columnName ...string) ent.Hook {
 	type fieldGetterMutation interface {
 		ent.Mutation
 		Field(string) (ent.Value, bool)
-	}
-
-	type settableMutation interface {
-		SetField(string, ent.Value) error
 	}
 
 	type wherePMutation interface {
@@ -140,18 +138,20 @@ func TenantMutationHook(columnName ...string) ent.Hook {
 						}
 					}
 				}
-				if sm, ok := m.(settableMutation); ok {
-					_ = sm.SetField(col, tenantID)
+				if err := m.SetField(col, tenantID); err != nil {
+					return nil, fmt.Errorf("%w: setting %q on %T: %v", ErrTenantScopeUnsupported, col, m, err)
 				}
 			}
 
 			// On Update/Delete: enforce tenant scope at storage level
 			if m.Op().Is(ent.OpUpdate | ent.OpUpdateOne | ent.OpDelete | ent.OpDeleteOne) {
-				if wm, ok := m.(wherePMutation); ok {
-					wm.WhereP(func(s *sql.Selector) {
-						s.Where(sql.EQ(s.C(col), tenantID))
-					})
+				wm, ok := m.(wherePMutation)
+				if !ok {
+					return nil, fmt.Errorf("%w: %T has no WhereP method", ErrTenantScopeUnsupported, m)
 				}
+				wm.WhereP(func(s *sql.Selector) {
+					s.Where(sql.EQ(s.C(col), tenantID))
+				})
 			}
 
 			return next.Mutate(ctx, m)
