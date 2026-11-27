@@ -23,6 +23,7 @@ import (
 	"github.com/golaravel/golaravel/pkg/auth"
 	gcontext "github.com/golaravel/golaravel/pkg/context"
 	"github.com/golaravel/golaravel/pkg/database"
+	"github.com/golaravel/golaravel/pkg/features"
 	"github.com/golaravel/golaravel/pkg/golaravel"
 	"github.com/golaravel/golaravel/pkg/offline"
 	"github.com/golaravel/golaravel/pkg/offline/internal/testapp"
@@ -120,6 +121,29 @@ func main() {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
 		return c.JSON(http.StatusOK, map[string]string{"ok": id})
+	})
+
+	// pkg/features' public endpoint, for the TypeScript FeatureClient.
+	fm := features.NewInMemory(features.Options{})
+	if err := fm.Register(
+		features.Bool("invoices.recurring", false).Public(),
+		features.Enum("tax.mode", "inclusive", "inclusive", "exclusive", "none"), // not Public: never sent
+		features.JSON("ui.theme", map[string]string{"color": "blue"}).Public(),
+	); err != nil {
+		log.Fatal(err)
+	}
+	app.Router.GET("/features", identify, fm.Handler())
+	admin.POST("/features/:key", func(c *gcontext.Context) error {
+		var in struct {
+			Value any `json:"value"`
+		}
+		if err := json.NewDecoder(c.Request.Body).Decode(&in); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		if err := fm.Set(c.Context(), c.Param("key"), in.Value); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		return c.JSON(http.StatusOK, map[string]string{"ok": c.Param("key")})
 	})
 
 	ln, err := net.Listen("tcp", *addr)

@@ -18,3 +18,5 @@ export {
   EnvelopeError,
 } from "./crypto.js";
 export type * from "./types.js";
+export { FeatureClient } from "./features.js";
+export type { FeatureOptions, FeatureStorage, FeatureSnapshot, FeatureEvents } from "./features.js";

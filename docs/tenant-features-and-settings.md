@@ -152,6 +152,46 @@ inertiaEngine.ShareFunc("features", mgr.InertiaProp())
 if (usePage().props.features["invoices.recurring"]) { ... }
 ```
 
+### Offline and mobile clients
+
+`mgr.Handler()` serves the tenant's `Public` features as JSON, with an ETag, so clients can poll for changes cheaply:
+
+```go
+api.GET("/features", auth.BearerGuard(jwt), privacy.TenantMiddleware(privacy.JWTClaimResolver()), mgr.Handler())
+// 200 {"features": {"invoices.recurring": true, "ui.theme": {"color": "blue"}}}
+// 304 when If-None-Match matches; 403 without a tenant
+```
+
+In browsers and Tauri apps, `FeatureClient` from `@golaravel/offline` keeps the last known values across restarts and offline periods:
+
+```ts
+import { FeatureClient } from "@golaravel/offline";
+
+const features = await FeatureClient.open({
+  url: "https://pos.example.com/api/features",
+  headers: async () => ({ Authorization: `Bearer ${await token()}` }),
+  storageKey: `features:${tenantId}`, // one cache per tenant
+});
+
+if (features.enabled("invoices.recurring")) showRecurring(); // synchronous; never waits for the network
+const theme = features.value("ui.theme", { color: "blue" });
+features.on("change", rerender);
+```
+
+In Flutter (Android, iOS, desktop and web), the `golaravel` Dart package in `clients/flutter` has the same client:
+
+```dart
+final features = await FeatureClient.open(
+  url: Uri.parse('https://pos.example.com/api/features'),
+  headers: () async => {'Authorization': 'Bearer ${await token()}'},
+  storageKey: 'features:$tenantId',
+);
+if (features.enabled('invoices.recurring')) showRecurring();
+// FeatureClient is a ChangeNotifier: ListenableBuilder(listenable: features, ...)
+```
+
+In both clients, a feature never seen is off. Hiding something in the client is only for display: the server must still check with `Require` or `Get`.
+
 ---
 
 ## 5. Caching and events

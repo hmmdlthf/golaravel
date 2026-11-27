@@ -1,6 +1,6 @@
 # Plan: Per-Tenant Features & Settings (`pkg/features`)
 
-Status: Phases 1–3 done 2026-11-27 and released in v1.19.0. Tests pass on SQLite, MySQL 8.4, Postgres 17, and with a Redis 7 cache. Phase 4 (GoFilament settings page, super-admin screen, visibility helpers) is built in GoFilament.
+Status: Phases 1–3 done 2026-11-27 and released in v1.19.0. Tests pass on SQLite, MySQL 8.4, Postgres 17, and with a Redis 7 cache. Phase 4 (GoFilament settings page, super-admin screen, visibility helpers) shipped in GoFilament v1.46.0. Phase 5b (the `Manager.Handler` endpoint, plus a `FeatureClient` in TypeScript and in the Flutter package `clients/flutter`) is done but unreleased. Phase 5a, the plan layer, is still deferred.
 
 Decisions so far: no plan layer in v1, no user layer in v1, explicit tenant
 selection via `features.ForTenant(ctx, id)`, package name `features`.

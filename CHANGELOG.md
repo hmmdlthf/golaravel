@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Features endpoint (`pkg/features`)**: `mgr.Handler()` serves the tenant's `Public` features as `{"features": {...}}` for browsers, offline clients and mobile apps. Responses carry an `ETag`, and a matching `If-None-Match` gets `304` with no body, so polling is cheap. `Cache-Control: private, no-cache` keeps shared caches out. A request with no tenant gets `403`.
+- **`FeatureClient` (`@golaravel/offline`)**: reads the endpoint and keeps the last known features in `localStorage` (or your own storage), so an offline device still knows which features are on. Reads are synchronous. A feature never seen is off. The client revalidates with the ETag, polls every 60 s, refreshes when the device comes online or the tab is shown, and emits `change` and `error`. End-to-end tests run it against the real Go handler.
+- **Flutter client (`clients/flutter`, Dart package `golaravel`)**: GoLaravel's first Dart package, for Android, iOS, desktop and web. Its `FeatureClient` matches the TypeScript one. It caches with `shared_preferences`, revalidates with the ETag, polls, refreshes when the app returns to the foreground, and is a `ChangeNotifier` with `changes` and `errors` streams. Unit tests and an end-to-end test against the real Go handler run in CI.
+
+---
+
 ## [v1.19.0] - 2026-11-27
 
 ### Added
