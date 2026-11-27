@@ -29,16 +29,18 @@ func (e *Engine[T]) Pull(ctx context.Context, p Principal, deviceID string, curs
 		if err != nil {
 			return err
 		}
+		rows, err := e.store.changes(ctx, tx, p.TenantID, cursor, limit+1)
+		if err != nil {
+			return err
+		}
+		// Check the horizon after reading: Compact raises it before
+		// deleting, so if this read missed deleted rows, it shows here.
 		_, horizon, err := e.store.tenantState(ctx, tx, p.TenantID)
 		if err != nil {
 			return err
 		}
 		if cursor < horizon {
 			return ErrResyncRequired
-		}
-		rows, err := e.store.changes(ctx, tx, p.TenantID, cursor, limit+1)
-		if err != nil {
-			return err
 		}
 		if len(rows) > limit {
 			rows, out.HasMore = rows[:limit], true

@@ -219,29 +219,55 @@ func (s *store) changes(ctx context.Context, x ExecQuerier, tenant string, curso
 	return out, rows.Err()
 }
 
-var deviceCols = "id, tenant_id, user_id, name, platform, app_version, cursor_seq, created_at, last_push_at, last_pull_at, revoked_at"
+var deviceCols = "id, tenant_id, user_id, name, platform, app_version, public_key, cursor_seq, created_at, last_push_at, last_pull_at, revoked_at"
 
 func (s *store) createDevice(ctx context.Context, x ExecQuerier, d *Device) error {
-	_, err := x.ExecContext(ctx, s.q("INSERT INTO "+s.devices+" ("+deviceCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)"),
-		d.ID, d.TenantID, d.UserID, d.Name, d.Platform, d.AppVersion, d.Cursor, d.CreatedAt)
+	var pub any
+	if d.PublicKey != "" {
+		pub = d.PublicKey
+	}
+	_, err := x.ExecContext(ctx, s.q("INSERT INTO "+s.devices+" ("+deviceCols+") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL)"),
+		d.ID, d.TenantID, d.UserID, d.Name, d.Platform, d.AppVersion, pub, d.Cursor, d.CreatedAt)
 	return err
 }
 
-func (s *store) device(ctx context.Context, x ExecQuerier, id string) (*Device, error) {
+func scanDevice(sc func(dest ...any) error) (*Device, error) {
 	d := &Device{}
-	var user, name, platform, ver sql.NullString
+	var user, name, platform, ver, pub sql.NullString
 	var push, pull, revoked sql.NullInt64
-	err := queryRow(ctx, x, s.q("SELECT "+deviceCols+" FROM "+s.devices+" WHERE id = ?"), id)(
-		&d.ID, &d.TenantID, &user, &name, &platform, &ver, &d.Cursor, &d.CreatedAt, &push, &pull, &revoked)
+	if err := sc(&d.ID, &d.TenantID, &user, &name, &platform, &ver, &pub, &d.Cursor, &d.CreatedAt, &push, &pull, &revoked); err != nil {
+		return nil, err
+	}
+	d.UserID, d.Name, d.Platform, d.AppVersion, d.PublicKey = user.String, name.String, platform.String, ver.String, pub.String
+	d.LastPushAt, d.LastPullAt, d.RevokedAt = push.Int64, pull.Int64, revoked.Int64
+	d.Encrypted = d.PublicKey != ""
+	return d, nil
+}
+
+func (s *store) device(ctx context.Context, x ExecQuerier, id string) (*Device, error) {
+	d, err := scanDevice(queryRow(ctx, x, s.q("SELECT "+deviceCols+" FROM "+s.devices+" WHERE id = ?"), id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrUnknownDevice
 	}
+	return d, err
+}
+
+// listDevices returns a tenant's devices, newest first.
+func (s *store) listDevices(ctx context.Context, x ExecQuerier, tenant string) ([]*Device, error) {
+	rows, err := x.QueryContext(ctx, s.q("SELECT "+deviceCols+" FROM "+s.devices+" WHERE tenant_id = ? ORDER BY created_at DESC, id DESC"), tenant)
 	if err != nil {
 		return nil, err
 	}
-	d.UserID, d.Name, d.Platform, d.AppVersion = user.String, name.String, platform.String, ver.String
-	d.LastPushAt, d.LastPullAt, d.RevokedAt = push.Int64, pull.Int64, revoked.Int64
-	return d, nil
+	defer rows.Close()
+	var out []*Device
+	for rows.Next() {
+		d, err := scanDevice(rows.Scan)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
 }
 
 func (s *store) touchPush(ctx context.Context, x ExecQuerier, id string, at int64) error {
@@ -256,11 +282,60 @@ func (s *store) touchPull(ctx context.Context, x ExecQuerier, id string, cursor,
 }
 
 func (s *store) revokeDevice(ctx context.Context, x ExecQuerier, tenant, id string, at int64) (bool, error) {
-	res, err := x.ExecContext(ctx, s.q("UPDATE "+s.devices+" SET revoked_at = ? WHERE id = ? AND tenant_id = ? AND revoked_at IS NULL"),
+	res, err := x.ExecContext(ctx, s.q("UPDATE "+s.devices+" SET revoked_at = ?, public_key = NULL WHERE id = ? AND tenant_id = ? AND revoked_at IS NULL"),
 		at, id, tenant)
 	if err != nil {
 		return false, err
 	}
 	n, err := res.RowsAffected()
 	return n > 0, err
+}
+
+func (s *store) tenantIDs(ctx context.Context, x ExecQuerier) ([]string, error) {
+	rows, err := x.QueryContext(ctx, "SELECT id FROM "+s.tenants+" ORDER BY id")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// minLiveCursor is the oldest cursor among a tenant's active devices (not
+// revoked, seen since activeSince). ok is false when there are none.
+func (s *store) minLiveCursor(ctx context.Context, x ExecQuerier, tenant string, activeSince int64) (cursor int64, ok bool, err error) {
+	var c sql.NullInt64
+	err = queryRow(ctx, x, s.q(`SELECT MIN(cursor_seq) FROM `+s.devices+`
+		WHERE tenant_id = ? AND revoked_at IS NULL AND COALESCE(last_pull_at, created_at) >= ?`), tenant, activeSince)(&c)
+	return c.Int64, c.Valid, err
+}
+
+const purgeWhere = " WHERE tenant_id = ? AND seq <= ? AND created_at < ?"
+
+// purgeTop is the highest seq purgeLedger(maxSeq, before) would delete.
+func (s *store) purgeTop(ctx context.Context, x ExecQuerier, tenant string, maxSeq, before int64) (int64, error) {
+	var t sql.NullInt64
+	err := queryRow(ctx, x, s.q("SELECT MAX(seq) FROM "+s.ledger+purgeWhere), tenant, maxSeq, before)(&t)
+	return t.Int64, err
+}
+
+// purgeLedger deletes a tenant's rows at or below maxSeq older than before.
+func (s *store) purgeLedger(ctx context.Context, x ExecQuerier, tenant string, maxSeq, before int64) (int64, error) {
+	res, err := x.ExecContext(ctx, s.q("DELETE FROM "+s.ledger+purgeWhere), tenant, maxSeq, before)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+func (s *store) raiseHorizon(ctx context.Context, x ExecQuerier, tenant string, horizon int64) error {
+	_, err := x.ExecContext(ctx, s.q("UPDATE "+s.tenants+" SET horizon = ? WHERE id = ? AND horizon < ?"), horizon, tenant, horizon)
+	return err
 }

@@ -18,6 +18,7 @@ package offline
 
 import (
 	"context"
+	"crypto/ecdh"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
@@ -70,6 +71,13 @@ type Options[T Tx] struct {
 	Identify func(c *gcontext.Context) (Principal, error)
 	// MaxBody caps push request bodies (default 4 MiB).
 	MaxBody int64
+	// Keys turn on payload encryption for devices that register a public
+	// key. The first key is used for new devices; older ones stay listed
+	// for devices registered with them.
+	Keys []ServerKey
+	// RequireEncryption refuses devices without a key: registration must
+	// send one and keyless devices already registered can no longer sync.
+	RequireEncryption bool
 }
 
 // Engine processes pushes and pulls for registered resources.
@@ -119,6 +127,14 @@ func New[T Tx](opts Options[T]) (*Engine[T], error) {
 	}
 	if opts.MaxBody <= 0 {
 		opts.MaxBody = 4 << 20
+	}
+	if opts.RequireEncryption && len(opts.Keys) == 0 {
+		return nil, errors.New("offline: RequireEncryption needs at least one server key in Options.Keys")
+	}
+	for _, k := range opts.Keys {
+		if !validKey(k.ID) || k.Private == nil || k.Private.Curve() != ecdh.P256() {
+			return nil, fmt.Errorf("offline: server key %q must have an id and a P-256 private key", k.ID)
+		}
 	}
 	st, err := newStore(opts.Dialect, opts.Prefix)
 	if err != nil {
@@ -204,6 +220,21 @@ func (e *Engine[T]) RegisterDevice(ctx context.Context, p Principal, info Device
 	}
 	d := &Device{ID: NewID(), TenantID: p.TenantID, UserID: p.UserID, Name: clip(info.Name, 191),
 		Platform: clip(info.Platform, 64), AppVersion: clip(info.AppVersion, 64), CreatedAt: e.now()}
+	switch {
+	case info.PublicKey != "":
+		if !e.encryption() {
+			return nil, ErrEncryptionUnavailable
+		}
+		if _, err := parseDevicePublicKey(info.PublicKey); err != nil {
+			return nil, err
+		}
+		sk := e.opts.Keys[0]
+		d.PublicKey = mustJSON(deviceKey{KeyID: sk.ID, Public: strings.TrimRight(info.PublicKey, "=")})
+		d.Encrypted = true
+		d.ServerKey = &ServerPublicKey{KeyID: sk.ID, PublicKey: sk.PublicKey()}
+	case e.opts.RequireEncryption:
+		return nil, ErrEncryptionRequired
+	}
 	err := e.inTx(ctx, func(tx T) error { return e.store.createDevice(ctx, tx, d) })
 	if err != nil {
 		return nil, err
@@ -211,7 +242,19 @@ func (e *Engine[T]) RegisterDevice(ctx context.Context, p Principal, info Device
 	return d, nil
 }
 
-// RevokeDevice stops a device from syncing.
+// Devices lists a tenant's devices, newest first, for an admin screen.
+func (e *Engine[T]) Devices(ctx context.Context, tenant string) ([]*Device, error) {
+	var out []*Device
+	err := e.inTx(ctx, func(tx T) error {
+		var err error
+		out, err = e.store.listDevices(ctx, tx, tenant)
+		return err
+	})
+	return out, err
+}
+
+// RevokeDevice stops a device from syncing and deletes its key, so its
+// past envelopes can no longer be decrypted by the server either.
 func (e *Engine[T]) RevokeDevice(ctx context.Context, tenant, id string) error {
 	return e.inTx(ctx, func(tx T) error {
 		ok, err := e.store.revokeDevice(ctx, tx, tenant, id, e.now())
@@ -246,6 +289,9 @@ func (e *Engine[T]) checkDevice(ctx context.Context, x ExecQuerier, tenant, id s
 	}
 	if live && d.RevokedAt != 0 {
 		return nil, ErrDeviceRevoked
+	}
+	if live && e.opts.RequireEncryption && !d.Encrypted {
+		return nil, ErrEncryptionRequired
 	}
 	return d, nil
 }

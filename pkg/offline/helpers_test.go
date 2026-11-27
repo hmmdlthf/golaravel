@@ -29,7 +29,7 @@ type env struct {
 	failCount atomic.Int32
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T, configure ...func(*offline.Options[*testent.Tx])) *env {
 	t.Helper()
 	dsn := "file:" + filepath.Join(t.TempDir(), "sync.db") + "?_fk=1&_busy_timeout=10000&_journal_mode=WAL&_txlock=immediate"
 	client, err := testent.Open("sqlite3", dsn)
@@ -44,11 +44,15 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	e := &env{t: t, client: client, now: time.Now()}
-	eng, err := offline.New(offline.Options[*testent.Tx]{
+	opts := offline.Options[*testent.Tx]{
 		Begin:   func(ctx context.Context) (*testent.Tx, error) { return client.Tx(ctx) },
 		Dialect: database.SQLite,
 		Now:     func() time.Time { return e.now },
-	})
+	}
+	for _, f := range configure {
+		f(&opts)
+	}
+	eng, err := offline.New(opts)
 	if err != nil {
 		t.Fatal(err)
 	}

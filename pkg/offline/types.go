@@ -222,6 +222,13 @@ type Device struct {
 	LastPushAt int64  `json:"last_push_at,omitempty"`
 	LastPullAt int64  `json:"last_pull_at,omitempty"`
 	RevokedAt  int64  `json:"revoked_at,omitempty"`
+	// Encrypted is set when the device registered a key; its request
+	// bodies must then be envelopes and every response is one.
+	Encrypted bool `json:"encrypted"`
+	// ServerKey is returned once, at registration, for key derivation.
+	ServerKey *ServerPublicKey `json:"server_key,omitempty"`
+	// PublicKey is the stored key material (server key id + device key).
+	PublicKey string `json:"-"`
 }
 
 // DeviceInfo describes a device being registered.
@@ -229,6 +236,9 @@ type DeviceInfo struct {
 	Name       string `json:"name"`
 	Platform   string `json:"platform"`
 	AppVersion string `json:"app_version"`
+	// PublicKey is the device's ECDH P-256 public key, base64url raw,
+	// to turn on payload encryption.
+	PublicKey string `json:"public_key,omitempty"`
 }
 
 var (
