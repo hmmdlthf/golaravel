@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.20.1] - 2026-11-27
+
+### Added
+- **Integration tests for the offline sync engine (`pkg/offline`) on MySQL and Postgres**: the engine's SQL store had only been tested on SQLite. It now runs in the integration suite on SQLite (both drivers), MySQL 8.4 and Postgres 17. No engine changes were needed.
+  - **Sync flow.** `Migrate` runs twice. A repeated push is answered as duplicates and not applied again. A group with a rejected member rolls back entirely. The tests also cover paged pull with tombstones, `Engine.Record`, snapshot paging, tenant isolation, device listing and revocation.
+  - **Concurrency.** Six devices push onto one counter while another device pulls. The puller sees every row, so no late commit is skipped, and no increment is lost.
+  - **Compaction.** The horizon, resyncs for idle devices, and `CompactCLI`.
+
+---
+
 ## [v1.20.0] - 2026-11-27
 
 ### Added
