@@ -15,7 +15,10 @@ Unlike traditional Go solutions that pull in massive 100MB+ AWS SDK bundles, GoL
   - `PresignedPutURL(path, ttl)`: SigV4 query-authenticated direct client upload URLs (bypassing backend web servers).
 - **Streaming & Memory Efficiency**: `PutReader(path, r)` and `GetStream(path)` stream multi-gigabyte files directly to and from disks with constant low memory usage.
 - **Local Signed URLs**: Local filesystem disk supports cryptographic HMAC-SHA256 temporary URL generation and verification.
-- **Multipart Form Upload Helpers**: First-class `c.FormFile(field)` and `c.SaveUploadedFile(file, dst)` on `*context.Context`.
+- **Laravel-style uploads**: `c.File("avatar").Store("avatars", "public")`, `c.Files`, `c.HasFile`, `StoreAs`, `HashName`, and a type and extension detected from the file's bytes.
+- **Serving stored files**: `app.ServeStorage()` serves public files to anyone and private files through signed links, with safe download headers.
+- **Per-route upload limits**: `middleware.MaxBodySize(n)`.
+- **Test fakes**: `gltest.FakeStorage`, `gltest.FakeImage` and `gltest.FakeUpload`.
 
 ---
 
@@ -166,56 +169,123 @@ final response = await http.put(
 );
 ```
 
-### 3. Local Temporary URL Verification
+### 3. Serving Local Files (`app.ServeStorage`)
 
-When using the `local` driver, `TemporaryURL` generates cryptographic HMAC-SHA256 tokens validated via `VerifySignedURL`:
+The `local` and `public` disks build links under `/storage`. `app.ServeStorage()` mounts a route that answers them:
 
 ```go
-app.GET("/storage/signed/*path", func(c *golaravel.Context) error {
-    localDisk := golaravel.Storage.Disk("local").(*storage.LocalDriver)
-    
-    // Validate signature and expiration
-    if err := localDisk.VerifySignedURL(c.Request.URL.String()); err != nil {
-        return c.String(http.StatusForbidden, "Invalid or expired signed URL")
-    }
+app := golaravel.Default()
+app.ServeStorage()
+```
 
-    filePath := c.Param("path")
-    stream, _ := localDisk.GetStream(filePath)
-    defer stream.Close()
-    
-    return io.Copy(c.Response, stream)
-})
+| Request | Result |
+|---|---|
+| `GET /storage/public/avatars/a.png` | Served to anyone: the `public` disk is public. |
+| `GET /storage/contracts/nda.pdf` | 404: the `local` disk is private. |
+| A `TemporaryURL` link | Served while the signature is valid; 403 when tampered with or expired. |
+| `PUT` to a `PresignedPutURL` link | Stores the request body (direct uploads); 201. |
+
+Every response sends `X-Content-Type-Options: nosniff` and a sandboxing `Content-Security-Policy`. Images, PDFs, video, audio and plain text are shown inline. Anything a browser could run as a page (HTML, SVG, XML, scripts) is always downloaded. Directories, and paths with a segment starting with `.` (such as `.env`), get 404. Add `?download` or `?download=name.pdf` to any link to download it under that name.
+
+Call `ServeStorage` after registering extra local disks: it mounts every local disk's URL path. Without the engine, `storage.Handler()` is the same handler as an `http.Handler`.
+
+### 4. Visibility
+
+Like Laravel, a disk is **public** (its files may be linked with `URL`) or **private** (they need `TemporaryURL`).
+
+- The `public` disk is public. `local` and other disks are private.
+- Change a local disk with `(*storage.LocalDriver).SetVisibility(storage.VisibilityPublic)`.
+- An S3 disk is public when `S3Config.Visibility` (env `AWS_VISIBILITY`) is `public`. When that is empty, it is public if `PublicURLPrefix` (`AWS_URL`) is set.
+
+`DisplayURL` picks the right link for the disk:
+
+```go
+url, err := golaravel.Storage.DisplayURL("contracts/nda.pdf", 10*time.Minute, "local")
+// a signed link on a private disk, the plain URL on a public one
 ```
 
 ---
 
-## 📤 Multipart Form Uploads
+## 📤 File Uploads
 
-GoLaravel provides convenient HTTP upload helpers directly on `*golaravel.Context`:
+Uploaded files come as `*storage.UploadedFile` (`golaravel.UploadedFile`), which works like Laravel's `UploadedFile`:
 
 ```go
 app.POST("/user/avatar", func(c *golaravel.Context) error {
-    // 1. Extract uploaded file from multipart form
-    file, err := c.FormFile("avatar")
-    if err != nil {
-        return c.String(http.StatusBadRequest, "No file uploaded")
+    if !c.HasFile("avatar") {
+        return c.String(http.StatusUnprocessableEntity, "Choose a picture")
     }
-
-    // 2. Save directly to local filesystem
-    // err = c.SaveUploadedFile(file, "storage/app/public/avatars/" + file.Filename)
-
-    // 3. Or save directly to any Storage disk (S3, MinIO, or Local)
-    dstPath := fmt.Sprintf("avatars/%d_%s", c.Get("user_id"), file.Filename)
-    err = golaravel.Storage.SaveUploadedFile(file, dstPath, "s3")
+    // random name, guessed extension: "avatars/Xq3...9.png"
+    path, err := c.File("avatar").Store("avatars", "public")
     if err != nil {
-        return c.String(http.StatusInternalServerError, "Upload to cloud failed")
+        return err
     }
-
-    return c.JSON(http.StatusOK, map[string]string{
-        "url": golaravel.Storage.Disk("s3").URL(dstPath),
-    })
+    return c.JSON(http.StatusOK, map[string]string{"path": path, "url": golaravel.Storage.Disk("public").URL(path)})
 })
 ```
+
+| Request helper | Returns |
+|---|---|
+| `c.File("avatar")` | The file sent as `avatar` (or `avatar[]`), or nil. Methods on nil are safe: `Store` returns `storage.ErrNoFile`. |
+| `c.Files("photos")` | Every file sent as `photos` or `photos[]` (`<input multiple>`). |
+| `c.HasFile("avatar")` | Whether a file was sent. |
+| `c.AllFiles()` | All files, keyed by field name. |
+
+| `UploadedFile` method | Laravel | Notes |
+|---|---|---|
+| `Store(dir, disk...)` | `store()` | Random 40 character name; returns the path. |
+| `StoreAs(dir, name, disk...)` | `storeAs()` | `..` segments are removed. |
+| `StorePublicly(dir)` / `StorePubliclyAs(dir, name)` | `storePublicly()` | The `public` disk unless another is given. |
+| `HashName(dir...)` | `hashName()` | |
+| `ClientOriginalName()` | `getClientOriginalName()` | Without any directory part. Show it to people, never use it as a path. |
+| `ClientOriginalExtension()` | `getClientOriginalExtension()` | |
+| `ClientMimeType()` | `getClientMimeType()` | What the client claimed. |
+| `MimeType()` | `getMimeType()` | Detected from the bytes. |
+| `Extension()` | `extension()` | Guessed from the bytes. A PNG named `.exe` gets `png`; text and office files keep their own extension. |
+| `Size()`, `IsValid()`, `Open()`, `Bytes()` | | |
+
+Disk-level helpers in the style of Laravel's `Storage::putFile`:
+
+```go
+path, _ := golaravel.Storage.PutFile("invoices", file, "s3")
+path, _ = golaravel.Storage.PutFileAs("invoices", file, "inv-101.pdf", "s3")
+_ = golaravel.Storage.DeleteMany([]string{old1, old2}, "s3") // missing files are ignored
+```
+
+Validation rules (`file`, `image`, `mimes`, `mimetypes`, `extensions`, `dimensions`, `max` and so on) accept `*UploadedFile` values as well as multipart headers.
+
+### Upload size
+
+Request bodies are capped at 32 MiB (`app.MaxBodyBytes`). Give one route another limit with `middleware.MaxBodySize`, and a longer read time with `middleware.BodyReadTimeout`:
+
+```go
+app.POST("/videos",
+    middleware.MaxBodySize(2<<30),               // 2 GiB on this route only
+    middleware.BodyReadTimeout(30*time.Minute),
+    uploadVideo)
+```
+
+A bigger body fails to read: `c.File` returns nil and form parsing returns `*http.MaxBytesError`. Method spoofing (`_method`) reads only the fields before the first file, so large uploads are not parsed before routing.
+
+### Testing uploads
+
+```go
+func TestAvatarUpload(t *testing.T) {
+    disk := gltest.FakeStorage(t, "public") // in-memory, put back after the test
+
+    res := app.Test(t).Request("POST", "/user/avatar").
+        WithUpload("avatar", gltest.FakeImage("me.jpg", 200, 200)).
+        Send()
+
+    res.AssertOK()
+    disk.AssertCount("avatars", 1)
+}
+```
+
+- **`gltest.FakeImage(name, w, h)`** makes a real PNG, JPEG or GIF (picked by the extension), so `image` and `dimensions` rules pass.
+- **`gltest.FakeUpload(name, kb, mime...)`** makes a file that starts with the right signature for PDF, zip, office, gzip and mp3 files.
+- **`.UploadedFile()`** turns either into a `*storage.UploadedFile` for unit tests that don't send a request.
+- **Assertions:** `AssertExists`, `AssertMissing`, `AssertCount` and `AssertDirectoryEmpty`.
 
 ---
 

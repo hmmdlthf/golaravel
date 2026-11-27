@@ -23,6 +23,10 @@ type S3Config struct {
 	UsePathStyle    bool   // true for MinIO/LocalStack (http://host/bucket/key)
 	PublicURLPrefix string // Optional CDN / public domain (e.g. "https://cdn.example.com")
 	HTTPClient      *http.Client
+	// Visibility is VisibilityPublic when objects can be read through URL
+	// (a public bucket or CDN) and VisibilityPrivate when they need
+	// TemporaryURL. Empty means public when PublicURLPrefix is set.
+	Visibility string
 }
 
 // S3Driver implements Driver for S3-compatible object storage backends

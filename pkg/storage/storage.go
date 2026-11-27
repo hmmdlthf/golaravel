@@ -55,6 +55,9 @@ func NewDiskManager() *DiskManager {
 
 	// Register public disk
 	publicLocal, _ := NewLocalDriver(localPath+"/public", localURL+"/public", secret)
+	if publicLocal != nil {
+		publicLocal.SetVisibility(VisibilityPublic)
+	}
 	dm.disks["public"] = publicLocal
 
 	// Configure S3 / MinIO if credentials are provided in env
@@ -90,6 +93,7 @@ func (dm *DiskManager) configureS3FromEnv() {
 		Endpoint:        os.Getenv("AWS_ENDPOINT"),
 		UsePathStyle:    usePathStyle,
 		PublicURLPrefix: os.Getenv("AWS_URL"),
+		Visibility:      os.Getenv("AWS_VISIBILITY"),
 	})
 	if err == nil {
 		dm.disks["s3"] = s3Driver

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+
+	"github.com/golaravel/golaravel/pkg/storage"
 )
 
 func files(v any) []*multipart.FileHeader {
@@ -16,14 +18,32 @@ func files(v any) []*multipart.FileHeader {
 		}
 	case []*multipart.FileHeader:
 		return x
+	case *storage.UploadedFile:
+		if x != nil && x.Header() != nil {
+			return []*multipart.FileHeader{x.Header()}
+		}
+	case []*storage.UploadedFile:
+		var out []*multipart.FileHeader
+		for _, f := range x {
+			if f != nil && f.Header() != nil {
+				out = append(out, f.Header())
+			}
+		}
+		return out
 	case []any:
 		var out []*multipart.FileHeader
 		for _, e := range x {
-			f, ok := e.(*multipart.FileHeader)
-			if !ok {
+			switch f := e.(type) {
+			case *multipart.FileHeader:
+				out = append(out, f)
+			case *storage.UploadedFile:
+				if f == nil || f.Header() == nil {
+					return nil
+				}
+				out = append(out, f.Header())
+			default:
 				return nil
 			}
-			out = append(out, f)
 		}
 		return out
 	}

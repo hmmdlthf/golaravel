@@ -1,11 +1,14 @@
 package golaravel
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"os/signal"
@@ -19,6 +22,7 @@ import (
 	gcontext "github.com/golaravel/golaravel/pkg/context"
 	"github.com/golaravel/golaravel/pkg/middleware"
 	"github.com/golaravel/golaravel/pkg/router"
+	"github.com/golaravel/golaravel/pkg/storage"
 	gltest "github.com/golaravel/golaravel/pkg/testing"
 )
 
@@ -49,20 +53,20 @@ func (app *Engine) MethodOverride(enabled bool) *Engine {
 	return app
 }
 
-// overrideMethod applies method spoofing before routing.
-func overrideMethod(r *http.Request) {
+// overrideMethod applies method spoofing before routing. multipartMethod
+// is the "_method" peekMultipartMethod found in a multipart body.
+func overrideMethod(r *http.Request, multipartMethod string) {
 	if r.Method != http.MethodPost {
 		return
 	}
 	m := r.Header.Get("X-HTTP-Method-Override")
 	if m == "" {
 		ct := r.Header.Get("Content-Type")
-		if strings.HasPrefix(ct, "application/x-www-form-urlencoded") || strings.HasPrefix(ct, "multipart/form-data") {
-			if strings.HasPrefix(ct, "multipart/") {
-				_ = r.ParseMultipartForm(32 << 20)
-			} else {
-				_ = r.ParseForm()
-			}
+		switch {
+		case strings.HasPrefix(ct, "multipart/form-data"):
+			m = multipartMethod
+		case strings.HasPrefix(ct, "application/x-www-form-urlencoded"):
+			_ = r.ParseForm()
 			m = r.PostFormValue("_method")
 		}
 	}
@@ -70,6 +74,48 @@ func overrideMethod(r *http.Request) {
 	case http.MethodPut, http.MethodPatch, http.MethodDelete:
 		r.Method = strings.ToUpper(strings.TrimSpace(m))
 	}
+}
+
+// methodPeekBytes is how much of a multipart body is read to look for a
+// "_method" field; forms put it before their files.
+const methodPeekBytes = 64 << 10
+
+// peekMultipartMethod reads the leading text fields of a multipart body,
+// up to the first file or methodPeekBytes, looking for "_method", then
+// puts the bytes back so handlers read the whole body. Large uploads are
+// never parsed here, so routes can still change their body limit.
+func peekMultipartMethod(r *http.Request, ct string) string {
+	if r.Body == nil || r.Body == http.NoBody {
+		return ""
+	}
+	_, params, err := mime.ParseMediaType(ct)
+	if err != nil || params["boundary"] == "" {
+		return ""
+	}
+	var buf bytes.Buffer
+	mr := multipart.NewReader(io.TeeReader(io.LimitReader(r.Body, methodPeekBytes), &buf), params["boundary"])
+	method := ""
+	for {
+		part, err := mr.NextPart()
+		if err != nil || part.FileName() != "" {
+			break
+		}
+		if part.FormName() == "_method" {
+			b, _ := io.ReadAll(io.LimitReader(part, 16))
+			method = string(b)
+			break
+		}
+		if _, err := io.Copy(io.Discard, part); err != nil {
+			break
+		}
+	}
+	r.Body = replayBody{Reader: io.MultiReader(bytes.NewReader(buf.Bytes()), r.Body), Closer: r.Body}
+	return method
+}
+
+type replayBody struct {
+	io.Reader
+	io.Closer
 }
 
 // DefaultBodyReadTimeout limits how long reading a request body may take
@@ -146,22 +192,36 @@ func (app *Engine) Boot() error {
 
 // ServeHTTP implements http.Handler with zero-allocation context pooling.
 func (app *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Acquire pooled Context
-	if app.maxBody > 0 && r.Body != nil && r.Body != http.NoBody {
-		r.Body = http.MaxBytesReader(w, r.Body, app.maxBody)
-	}
 	if app.bodyTimeout > 0 && r.Body != nil && r.Body != http.NoBody && r.ContentLength != 0 && r.Header.Get("Upgrade") == "" {
 		ctl := http.NewResponseController(w)
 		if ctl.SetReadDeadline(time.Now().Add(app.bodyTimeout)) == nil {
 			r.Body = &deadlineBody{ReadCloser: r.Body, ctl: ctl}
 		}
 	}
-	if !app.noOverride {
-		overrideMethod(r)
+	// The limit can change per route (middleware.MaxBodySize), so it is a
+	// LimitedBody rather than http.MaxBytesReader.
+	// A multipart "_method" is looked for first, so the replayed bytes
+	// count towards the limit too.
+	peeked := ""
+	if !app.noOverride && r.Method == http.MethodPost && r.Header.Get("X-HTTP-Method-Override") == "" &&
+		strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		peeked = peekMultipartMethod(r, r.Header.Get("Content-Type"))
 	}
+	var limited *middleware.LimitedBody
+	if r.Body != nil && r.Body != http.NoBody {
+		limited = middleware.NewLimitedBody(r.Body, app.maxBody)
+		r.Body = limited
+	}
+	if !app.noOverride {
+		overrideMethod(r, peeked)
+	}
+	// Acquire pooled Context
 	c := app.pool.Get().(*gcontext.Context)
 	c.Reset(w, r)
 	c.Container = app.Container.Scoped()
+	if limited != nil {
+		c.Set(middleware.BodyLimitKey, limited)
+	}
 
 	// Zero-allocation Radix tree route matching
 	handlers := app.Router.Match(r.Method, r.URL.Path, c)
@@ -176,6 +236,29 @@ func (app *Engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Recycle Context back to pool
 	app.pool.Put(c)
+}
+
+// ServeStorage mounts the local storage disks at their URL paths
+// ("/storage" by default) so the links storage.URL and
+// storage.TemporaryURL build work: files on the "public" disk are served
+// to anyone, files on other disks only through valid signed links, and
+// PresignedPutURL links accept direct uploads. See storage.Handler for
+// the rules. Call it after registering any extra local disks.
+//
+//	app := golaravel.Default()
+//	app.ServeStorage()
+func (app *Engine) ServeStorage() *Engine {
+	h := storage.Handler()
+	serve := func(c *gcontext.Context) error {
+		h.ServeHTTP(&c.Response, c.Request)
+		return nil
+	}
+	for _, prefix := range storage.MountPaths() {
+		app.GET(prefix+"/*filepath", serve)
+		app.HEAD(prefix+"/*filepath", serve)
+		app.PUT(prefix+"/*filepath", serve)
+	}
+	return app
 }
 
 // Test creates an HTTP test harness client directly against this Engine with zero network overhead.

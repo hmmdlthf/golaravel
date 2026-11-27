@@ -29,6 +29,8 @@ type LocalDriver struct {
 	// logged once, the first time a URL is actually signed.
 	randomSecret bool
 	warnOnce     sync.Once
+
+	visibility string // VisibilityPublic or VisibilityPrivate (default)
 }
 
 // insecureDefaultSecret is the fallback earlier versions used; it is public.
@@ -63,6 +65,28 @@ func NewLocalDriver(basePath, baseURL string, secret ...string) (*LocalDriver, e
 		randomSecret: random,
 	}, nil
 }
+
+// SetVisibility marks the disk's files public (served to anyone by
+// storage.Handler / app.ServeStorage) or private (served only through
+// TemporaryURL links). It returns the driver for chaining.
+func (d *LocalDriver) SetVisibility(v string) *LocalDriver {
+	d.visibility = v
+	return d
+}
+
+// Visibility returns VisibilityPublic or VisibilityPrivate.
+func (d *LocalDriver) Visibility() string {
+	if d.visibility == VisibilityPublic {
+		return VisibilityPublic
+	}
+	return VisibilityPrivate
+}
+
+// Root returns the directory the disk stores files in.
+func (d *LocalDriver) Root() string { return d.basePath }
+
+// BaseURL returns the URL prefix of the disk's files.
+func (d *LocalDriver) BaseURL() string { return d.baseURL }
 
 // fullPath resolves and cleans the relative storage path against the basePath.
 func (d *LocalDriver) fullPath(path string) string {

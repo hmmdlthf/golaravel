@@ -42,6 +42,7 @@ type (
 	Engine          = golaravel.Engine
 	Context         = context.Context
 	HandlerFunc     = context.HandlerFunc
+	UploadedFile    = storage.UploadedFile
 	Route           = router.Route
 	RouteGroup      = router.RouteGroup
 	Validator       = validation.Validator
@@ -287,6 +288,11 @@ var (
 		TemporaryURL     func(path string, ttl time.Duration) (string, error)
 		PresignedPutURL  func(path string, ttl time.Duration) (string, error)
 		SaveUploadedFile func(file *multipart.FileHeader, dstPath string, disk ...string) error
+		PutFile          func(dir string, f *storage.UploadedFile, disk ...string) (string, error)
+		PutFileAs        func(dir string, f *storage.UploadedFile, name string, disk ...string) (string, error)
+		DeleteMany       func(paths []string, disk ...string) error
+		Visibility       func(disk ...string) string
+		DisplayURL       func(path string, ttl time.Duration, disk ...string) (string, error)
 	}{
 		Disk:             storage.Disk,
 		RegisterDisk:     storage.RegisterDisk,
@@ -306,6 +312,11 @@ var (
 		TemporaryURL:     storage.TemporaryURL,
 		PresignedPutURL:  storage.PresignedPutURL,
 		SaveUploadedFile: storage.SaveUploadedFile,
+		PutFile:          storage.PutFile,
+		PutFileAs:        storage.PutFileAs,
+		DeleteMany:       storage.DeleteMany,
+		Visibility:       storage.Visibility,
+		DisplayURL:       storage.DisplayURL,
 	}
 
 	// Mail provides access to advanced email sending, mailable builders, and preview studio

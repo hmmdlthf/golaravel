@@ -154,7 +154,7 @@ func (b *TestRequestBuilder) Send() *TestResponse {
 
 		// Attached files
 		for _, f := range b.files {
-			part, err := writer.CreateFormFile(f.fieldName, f.filename)
+			part, err := writer.CreatePart(FakeFile{Name: f.filename, ContentType: f.contentType}.partHeader(f.fieldName))
 			if err != nil {
 				b.client.t.Fatalf("failed to create multipart file part: %v", err)
 			}

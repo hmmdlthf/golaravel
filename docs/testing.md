@@ -97,6 +97,22 @@ res.AssertOK().
     AssertJsonPath("size", len(documentBytes))
 ```
 
+Fake files and an in-memory disk, in the style of Laravel's `UploadedFile::fake()` and `Storage::fake()`:
+
+```go
+disk := gltest.FakeStorage(t, "public")
+
+app.Test(t).Request("POST", "/gallery").
+    WithUpload("photos[]", gltest.FakeImage("a.jpg", 640, 480), gltest.FakeImage("b.png", 640, 480)).
+    WithUpload("cv", gltest.FakeUpload("cv.pdf", 120)). // 120 KB, starts like a real PDF
+    Send().
+    AssertOK()
+
+disk.AssertCount("gallery", 2)
+```
+
+See [File Uploads](cloud-storage-and-s3.md#-file-uploads) for the helpers.
+
 ---
 
 ## 🔍 Assertions Catalog

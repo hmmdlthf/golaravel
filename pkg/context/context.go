@@ -18,6 +18,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/goccy/go-json"
 	"github.com/golaravel/golaravel/pkg/container"
+	"github.com/golaravel/golaravel/pkg/storage"
 )
 
 // MaxParams defines the maximum number of route parameters supported without heap allocation.
@@ -518,6 +519,71 @@ func (c *Context) FormFile(name string) (*multipart.FileHeader, error) {
 	}
 	_, fh, err := c.Request.FormFile(name)
 	return fh, err
+}
+
+// multipartFiles parses a multipart body (once) and returns its files;
+// nil for other requests.
+func (c *Context) multipartFiles() map[string][]*multipart.FileHeader {
+	if c.Request == nil {
+		return nil
+	}
+	if c.Request.MultipartForm == nil {
+		if !strings.HasPrefix(c.Request.Header.Get("Content-Type"), "multipart/") {
+			return nil
+		}
+		if err := c.Request.ParseMultipartForm(32 << 20); err != nil {
+			return nil
+		}
+	}
+	return c.Request.MultipartForm.File
+}
+
+// File returns the uploaded file sent as name (or name[]), like Laravel's
+// $request->file(). It returns nil when there is none; calling methods on
+// the nil file is safe (Store returns storage.ErrNoFile).
+//
+//	path, err := c.File("avatar").Store("avatars", "public")
+func (c *Context) File(name string) *storage.UploadedFile {
+	if fs := c.Files(name); len(fs) > 0 {
+		return fs[0]
+	}
+	return nil
+}
+
+// Files returns every file sent as name or name[] (for <input multiple>).
+func (c *Context) Files(name string) []*storage.UploadedFile {
+	all := c.multipartFiles()
+	name = strings.TrimSuffix(name, "[]")
+	var out []*storage.UploadedFile
+	for _, key := range []string{name, name + "[]"} {
+		for _, fh := range all[key] {
+			out = append(out, storage.NewUploadedFile(fh))
+		}
+	}
+	return out
+}
+
+// HasFile reports whether a file was uploaded as name (or name[]).
+func (c *Context) HasFile(name string) bool {
+	for _, f := range c.Files(name) {
+		if f.Size() > 0 || f.ClientOriginalName() != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// AllFiles returns every uploaded file, keyed by form field name (without
+// a trailing "[]").
+func (c *Context) AllFiles() map[string][]*storage.UploadedFile {
+	out := map[string][]*storage.UploadedFile{}
+	for key, fhs := range c.multipartFiles() {
+		k := strings.TrimSuffix(key, "[]")
+		for _, fh := range fhs {
+			out[k] = append(out[k], storage.NewUploadedFile(fh))
+		}
+	}
+	return out
 }
 
 // SaveUploadedFile uploads the form file to specific dst.
