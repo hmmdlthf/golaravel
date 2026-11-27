@@ -1,0 +1,20 @@
+name: golaravel
+description: Flutter client for GoLaravel. Per-tenant features (pkg/features) on Android, iOS, desktop and web, cached for offline use.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: '>=3.22.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+  shared_preferences: ^2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  shared_preferences_platform_interface: ^2.4.2

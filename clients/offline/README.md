@@ -44,6 +44,28 @@ Set the server up with `pkg/offline`, mounting the routes behind your auth and t
 eng.Routes(app.Group("/api/sync", auth.BearerGuard(jwt), privacy.TenantMiddleware(privacy.JWTClaimResolver())))
 ```
 
+## Features
+
+`FeatureClient` reads the tenant's public features from `pkg/features`' endpoint (`mgr.Handler()`) and keeps the last known values, so an offline till still knows which features are on.
+
+```ts
+import { FeatureClient } from "@golaravel/offline";
+
+const features = await FeatureClient.open({
+  url: "https://pos.example.com/api/features",
+  headers: async () => ({ Authorization: `Bearer ${await token()}` }),
+  storageKey: `features:${tenantId}`,
+});
+
+features.enabled("invoices.recurring");       // true only when the value is exactly true
+features.value("ui.theme", { color: "blue" }); // fallback when unknown
+features.on("change", (all) => rerender(all));
+```
+
+- **Reads never wait for the network.** Values come from the last server answer, cached in `localStorage` by default (pass `storage` for your own, or `false` for none). Before the first answer every feature is off.
+- **Cheap polling.** The client revalidates with `If-None-Match` every `pollInterval` (default 60 s), and also when the device comes online or the tab is shown. An unchanged answer is a `304` with no body.
+- **Failures keep the last values.** `refresh()` rejects and `error` fires, but the cached values stay in use.
+
 ## Errors
 
 | Server answer | What the client does |

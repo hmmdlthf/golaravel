@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { SyncClient, type SyncOptions } from "../src/client.js";
+import { FeatureClient } from "../src/features.js";
 
 const enabled = process.env.GOLARAVEL_E2E === "1";
 const repo = resolve(__dirname, "../../..");
@@ -136,6 +137,63 @@ describe.skipIf(!enabled).each([
     await b.syncNow();
     expect(await b.table("product").get(id)).toBeUndefined();
     expect((await admin("GET", id)).body.deleted).toBe(true);
+  }, 30_000);
+});
+
+describe.skipIf(!enabled)("features endpoint (pkg/features Manager.Handler)", () => {
+  const setFeature = async (key: string, value: unknown, tenant: string) => {
+    const r = await fetch(`${base}/admin/features/${key}`, {
+      method: "POST",
+      headers: { ...headers(tenant), "Content-Type": "application/json" },
+      body: JSON.stringify({ value }),
+    });
+    expect(r.status).toBe(200);
+  };
+
+  test("public features per tenant, revalidated by ETag, cached offline", async () => {
+    const requests: Response[] = [];
+    const counting: typeof fetch = async (input, init) => {
+      const r = await fetch(input, init);
+      requests.push(r.clone());
+      return r;
+    };
+    const storage = new Map<string, string>();
+    const open = (tenant: string, f: typeof fetch = counting) =>
+      FeatureClient.open({
+        url: `${base}/features`,
+        headers: () => headers(tenant),
+        fetch: f,
+        storage: { get: (k) => storage.get(k) ?? null, set: (k, v) => void storage.set(k, v) },
+        storageKey: `features:${tenant}`,
+        autoStart: false,
+        pollInterval: 0,
+      });
+
+    const acme = await open("acme");
+    expect(await acme.refresh()).toBe(true);
+    expect(acme.enabled("invoices.recurring")).toBe(false);
+    expect(acme.value("ui.theme", {})).toEqual({ color: "blue" });
+    expect(acme.value("tax.mode", "unsent")).toBe("unsent"); // not Public
+
+    expect(await acme.refresh()).toBe(false);
+    expect(requests.at(-1)!.status).toBe(304);
+
+    await setFeature("invoices.recurring", true, "acme");
+    expect(await acme.refresh()).toBe(true);
+    expect(acme.enabled("invoices.recurring")).toBe(true);
+
+    const globex = await open("globex");
+    await globex.refresh();
+    expect(globex.enabled("invoices.recurring")).toBe(false);
+
+    // Offline restart: the cached values answer.
+    const offline = await open("acme", async () => {
+      throw new TypeError("fetch failed");
+    });
+    expect(offline.enabled("invoices.recurring")).toBe(true);
+    await expect(offline.refresh()).rejects.toThrow();
+    expect(offline.enabled("invoices.recurring")).toBe(true);
+    for (const c of [acme, globex, offline]) c.close();
   }, 30_000);
 });
 
