@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Offline sync engine, server core (`pkg/offline`)**: push/pull sync for offline-first clients such as POS terminals.
+  - **Push is idempotent.** A retried mutation id comes back as a duplicate with its original outcome and is not applied again. Idempotency is per tenant.
+  - **Each mutation is atomic.** It is applied in its own transaction together with its row in an append-only ledger. Mutations sharing a `group` are applied all-or-nothing.
+  - **Transient failures keep order.** One stops the batch, and that mutation and everything after it come back as `retry`. Permanent ones come back as `rejected`, with the server's current record so the client can undo its local change.
+  - **Pull cannot skip a change.** It returns each changed entity once, in its current state or as a tombstone, after a cursor. A per-tenant sequence lock makes ledger rows commit in order, so a change that commits late is never missed.
+  - **Snapshots and resyncs.** `Snapshot` pages through an entity for first-time loading, and a cursor older than the retained history gets `410 resync_required`.
+  - **Conflicts are settled with hybrid logical clocks.** Strategies: `FieldLWW` (default), `LWW`, `ServerWins`, `ClientWins`, or a custom `Resolver`. Counter fields take `inc` deltas that add up across devices. Device clocks too far ahead are replaced with server time.
+  - **Admin edits reach devices.** `offline.ChangeHook` records writes made outside sync (admin panel, jobs) and stamps them with the server clock, so devices pull them and older offline edits don't overwrite them.
+  - **HTTP endpoints and storage.** Devices are registered per tenant and can be revoked. The endpoints are `POST /devices`, `POST /push`, `GET /pull` and `GET /snapshot`. Tables are created by `Engine.Migrate` (SQLite, MySQL, Postgres) or by the Ent schemas in `pkg/offline/schema`, which also provides `SyncableMixin`. Ent apps enable the `sql/execquery` feature so resources write through their own `*ent.Tx`.
+
 ### Fixed
 - **Security: `privacy.TenantSQLInterceptor` did not filter Ent queries**: it looked for a `WhereP` method, which generated `*XQuery` types don't have (only mutations do), so it skipped the tenant filter without an error and a query in one tenant's context returned other tenants' rows. It now adds `WHERE tenant_id = ?` through the query's generated `Where(...predicate.X)` method, and a query type it cannot filter fails with the new `privacy.ErrTenantScopeUnsupported` instead of running unfiltered. Apps using `TenantSQLInterceptor` should upgrade; `TenantScope` was not affected.
 - **`privacy.TenantMutationHook` skipped tenant enforcement without an error**: an update or delete on a mutation without `WhereP` ran without the `tenant_id` filter, and a failed `SetField` on create was ignored, so the row could be saved without the tenant. Both now fail with `ErrTenantScopeUnsupported` before the mutation runs. Generated Ent mutations with `TenantMixin` were not affected.
