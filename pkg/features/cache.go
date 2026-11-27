@@ -45,6 +45,14 @@ func memoFrom(ctx context.Context) *memo {
 // values returns the active tenant's stored values (name → raw JSON). The
 // map must not be modified. With tenancy bypassed it is empty.
 func (m *Manager) values(ctx context.Context) (map[string]string, error) {
+	vals, err := m.storedValues(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return m.withFakes(ctx, vals)
+}
+
+func (m *Manager) storedValues(ctx context.Context) (map[string]string, error) {
 	t, ok, err := tenant(ctx)
 	if err != nil || !ok {
 		return nil, err

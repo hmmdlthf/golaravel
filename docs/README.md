@@ -185,3 +185,10 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
 28. **[Performance & Benchmarks](./benchmarks.md)**
     - Zero-Allocation Architecture Methodology
     - Micro-benchmark Results vs Gin, Fiber, and Laravel Octane
+
+29. **[Per-Tenant Features & Settings](./tenant-features-and-settings.md)**
+   - Typed Features & Settings with Code Defaults (`features.Bool`, `Enum`, `Int`, `JSON`)
+   - Per-Tenant Overrides, Validation & Fail-Closed Tenancy
+   - `Require` Middleware & Inertia Shared Props
+   - Caching, Request Memo & `Changed` Events
+   - `features:*` Artisan Commands & `features.Fake` for Tests

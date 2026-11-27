@@ -53,7 +53,7 @@ type Options struct {
 // Manager holds the registered features and resolves their values per
 // tenant.
 type Manager struct {
-	store       *store
+	store       backend
 	cache       cache.Store
 	cacheTTL    time.Duration
 	cachePrefix string
@@ -72,14 +72,28 @@ func New(opts Options) (*Manager, error) {
 	if opts.DB == nil {
 		return nil, fmt.Errorf("features: Options.DB is required")
 	}
+	return newManager(opts, nil)
+}
+
+// NewInMemory returns a Manager that keeps values in memory instead of a
+// database, for tests and tools. Options.DB, Dialect and Table are ignored.
+func NewInMemory(opts Options) *Manager {
+	m, _ := newManager(opts, &memStore{vals: map[string]map[string]string{}})
+	return m
+}
+
+func newManager(opts Options, b backend) (*Manager, error) {
 	if opts.Dialect == "" {
 		opts.Dialect = database.SQLite
 	}
 	if opts.Table == "" {
 		opts.Table = "tenant_settings"
 	}
-	if !database.ValidIdentifier(opts.Table) {
-		return nil, fmt.Errorf("features: invalid table name %q", opts.Table)
+	if b == nil {
+		if !database.ValidIdentifier(opts.Table) {
+			return nil, fmt.Errorf("features: invalid table name %q", opts.Table)
+		}
+		b = &sqlStore{db: opts.DB, d: opts.Dialect, table: opts.Table}
 	}
 	if opts.Now == nil {
 		opts.Now = time.Now
@@ -94,7 +108,7 @@ func New(opts Options) (*Manager, error) {
 		opts.Events = globalEvents{}
 	}
 	return &Manager{
-		store:       &store{db: opts.DB, d: opts.Dialect, table: opts.Table},
+		store:       b,
 		cache:       opts.Cache,
 		cacheTTL:    opts.CacheTTL,
 		cachePrefix: "features:" + opts.Table + ":",
@@ -244,7 +258,14 @@ func (m *Manager) definition(key string) (Definition, error) {
 // resolve returns the tenant's value for d and whether it is an override.
 // An invalid stored value falls back to the default.
 func (m *Manager) resolve(ctx context.Context, d Definition) (any, bool, error) {
-	vals, err := m.values(ctx)
+	if raw, ok, err := m.fake(ctx, d); err != nil || ok {
+		if err != nil {
+			return d.defaultValue(), false, err
+		}
+		v, over := m.pick(ctx, d, map[string]string{d.Meta().Key: raw})
+		return v, over, nil
+	}
+	vals, err := m.storedValues(ctx)
 	if err != nil {
 		return d.defaultValue(), false, err
 	}

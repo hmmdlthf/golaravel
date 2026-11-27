@@ -30,6 +30,7 @@ type Engine struct {
 	version     string
 	rootView    func(c *context.Context, page *Page) error
 	sharedProps map[string]any
+	sharedFuncs map[string]func(c *context.Context) any
 	mu          sync.RWMutex
 }
 
@@ -38,6 +39,7 @@ func New(version string) *Engine {
 	e := &Engine{
 		version:     version,
 		sharedProps: make(map[string]any),
+		sharedFuncs: make(map[string]func(c *context.Context) any),
 	}
 	// Default root HTML renderer
 	e.rootView = DefaultRootView
@@ -65,6 +67,16 @@ func (e *Engine) Share(key string, value any) {
 	e.sharedProps[key] = value
 }
 
+// ShareFunc sets a shared prop computed per request, such as the current
+// user or the tenant's features. It runs on every Render; a prop of the
+// same key from Share or the handler takes precedence in that order:
+// handler props, then ShareFunc, then Share.
+func (e *Engine) ShareFunc(key string, fn func(c *context.Context) any) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.sharedFuncs[key] = fn
+}
+
 // SetRootView sets a custom root layout renderer.
 func (e *Engine) SetRootView(fn func(c *context.Context, page *Page) error) {
 	e.rootView = fn
@@ -74,11 +86,21 @@ func (e *Engine) SetRootView(fn func(c *context.Context, page *Page) error) {
 func (e *Engine) Render(c *context.Context, status int, component string, props map[string]any) error {
 	// Merge shared props with handler props
 	e.mu.RLock()
-	finalProps := make(map[string]any, len(e.sharedProps)+len(props))
+	finalProps := make(map[string]any, len(e.sharedProps)+len(e.sharedFuncs)+len(props))
 	for k, v := range e.sharedProps {
 		finalProps[k] = v
 	}
+	funcs := make(map[string]func(c *context.Context) any, len(e.sharedFuncs))
+	for k, fn := range e.sharedFuncs {
+		funcs[k] = fn
+	}
 	e.mu.RUnlock()
+
+	for k, fn := range funcs {
+		if _, override := props[k]; !override {
+			finalProps[k] = fn(c)
+		}
+	}
 
 	for k, v := range props {
 		finalProps[k] = v

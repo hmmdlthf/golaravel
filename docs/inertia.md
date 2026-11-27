@@ -27,6 +27,10 @@ func main() {
 	// Share global props across all views (e.g. auth user, app name)
 	inertiaEngine.Share("appName", "GoLaravel Enterprise")
 
+	// Props computed per request (current user, tenant features). Handler
+	// props override them, and they override Share.
+	inertiaEngine.ShareFunc("features", featureManager.InertiaProp())
+
 	app.GET("/users", func(c *golaravel.Context) error {
 		return c.Inertia(200, "Users/Index", map[string]any{
 			"users": []string{"Alice", "Bob"},

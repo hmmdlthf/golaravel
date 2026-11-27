@@ -1,6 +1,6 @@
 # Plan: Per-Tenant Features & Settings (`pkg/features`)
 
-Status: Phases 1 and 2 done, 2026-11-27. Tests pass on SQLite, MySQL 8.4, Postgres 17, and with a Redis 7 cache.
+Status: Phases 1–3 done, 2026-11-27. Tests pass on SQLite, MySQL 8.4, Postgres 17, and with a Redis 7 cache.
 
 Decisions so far: no plan layer in v1, no user layer in v1, explicit tenant
 selection via `features.ForTenant(ctx, id)`, package name `features`.
@@ -116,6 +116,15 @@ Phase 2 differs from the sketch above in these ways:
   be served after it.
 - The request memo is opt-in through `features.WithMemo(ctx)`. The Phase 3
   middleware will install it.
+
+Phase 3 differs from the sketch above in these ways:
+- Inertia gained `Engine.ShareFunc` for props computed per request.
+  Features plug in with `inertiaEngine.ShareFunc("features", mgr.InertiaProp())`.
+- Artisan commands come from `features.NewCLI(mgr, out).Commands()`, so
+  `pkg/features` doesn't import `pkg/artisan`. This follows `offline.CompactCLI`.
+- `features.Fake` covers only the faked keys: unfaked keys and `All` still
+  need a tenant. `features.NewInMemory` gives a manager with no database.
+- The `GET /features` endpoint for offline and mobile clients moves to phase 5.
 
 ## Integration points
 
