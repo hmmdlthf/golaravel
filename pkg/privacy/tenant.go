@@ -2,6 +2,8 @@ package privacy
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -27,16 +29,22 @@ func TenantScope[Q any](whereTenantEQ func(q Q, tenantID string)) ent.Intercepto
 	})
 }
 
-// TenantSQLInterceptor returns a generic Ent interceptor that uses SQL selectors
-// to enforce tenant isolation using the given column name (default: "tenant_id").
+// TenantSQLInterceptor returns a generic Ent interceptor that filters every query
+// by the given tenant column (default: "tenant_id") through a storage-level
+// predicate. It works on any Ent-generated query (`*XQuery`): it calls the
+// query's `Where(ps ...predicate.X)` method with a predicate that adds
+// `WHERE <col> = <tenant>` to the query's selector.
+//
+// It fails closed: if the query type has no such Where method, the query
+// aborts with ErrTenantScopeUnsupported instead of running unfiltered.
+// Without a tenant in the context (and no bypass), it returns ErrTenantMissing.
+//
+// The typed TenantScope is the preferred API where the generated
+// `x.TenantIDEQ` predicate is available, since it is checked at compile time.
 func TenantSQLInterceptor(columnName ...string) ent.Interceptor {
 	col := "tenant_id"
 	if len(columnName) > 0 && columnName[0] != "" {
 		col = columnName[0]
-	}
-
-	type wherePQuery interface {
-		WhereP(...func(*sql.Selector))
 	}
 
 	return ent.TraverseFunc(func(ctx context.Context, q ent.Query) error {
@@ -49,16 +57,44 @@ func TenantSQLInterceptor(columnName ...string) ent.Interceptor {
 			return ErrTenantMissing
 		}
 
-		wq, ok := q.(wherePQuery)
-		if !ok {
-			return nil
-		}
-
-		wq.WhereP(func(s *sql.Selector) {
+		return applySelectorPredicate(q, func(s *sql.Selector) {
 			s.Where(sql.EQ(s.C(col), tenantID))
 		})
-		return nil
 	})
+}
+
+var selectorFuncType = reflect.TypeOf((func(*sql.Selector))(nil))
+
+// applySelectorPredicate adds a storage-level predicate to an Ent query.
+// Generated queries expose `Where(ps ...predicate.X) *XQuery`, where
+// predicate.X is a named `func(*sql.Selector)`. No Go interface can match
+// that across entity types, so the method is found by reflection and the
+// predicate converted to the query's own predicate type.
+func applySelectorPredicate(q ent.Query, p func(*sql.Selector)) error {
+	if wq, ok := q.(interface{ WhereP(...func(*sql.Selector)) }); ok {
+		wq.WhereP(p)
+		return nil
+	}
+
+	v := reflect.ValueOf(q)
+	if !v.IsValid() {
+		return fmt.Errorf("%w: nil query", ErrTenantScopeUnsupported)
+	}
+	m := v.MethodByName("Where")
+	if !m.IsValid() {
+		return fmt.Errorf("%w: %T has no Where method", ErrTenantScopeUnsupported, q)
+	}
+	mt := m.Type()
+	if !mt.IsVariadic() || mt.NumIn() != 1 {
+		return fmt.Errorf("%w: %T.Where is not variadic", ErrTenantScopeUnsupported, q)
+	}
+	elem := mt.In(0).Elem()
+	if !selectorFuncType.ConvertibleTo(elem) || elem.Kind() != reflect.Func {
+		return fmt.Errorf("%w: %T.Where takes %s, not a func(*sql.Selector) predicate", ErrTenantScopeUnsupported, q, elem)
+	}
+	pv := reflect.ValueOf(p).Convert(elem)
+	m.Call([]reflect.Value{pv})
+	return nil
 }
 
 // TenantMutationHook enforces tenant isolation on create, update, and delete mutations.

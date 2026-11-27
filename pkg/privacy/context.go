@@ -8,6 +8,9 @@ import (
 var (
 	ErrTenantMissing  = errors.New("privacy/tenant: tenant id is missing from context")
 	ErrTenantMismatch = errors.New("privacy/tenant: entity does not belong to the active tenant")
+	// ErrTenantScopeUnsupported is returned when a tenant interceptor cannot add
+	// its filter to a query; the query is refused rather than run unfiltered.
+	ErrTenantScopeUnsupported = errors.New("privacy/tenant: query type does not support tenant filtering")
 )
 
 type contextKey string
@@ -15,7 +18,7 @@ type contextKey string
 const (
 	tenantKey        contextKey = "golaravel_tenant_id"
 	bypassTenancyKey contextKey = "golaravel_bypass_tenancy"
-	withTrashedKey    contextKey = "golaravel_with_trashed"
+	withTrashedKey   contextKey = "golaravel_with_trashed"
 	onlyTrashedKey   contextKey = "golaravel_only_trashed"
 	forceDeleteKey   contextKey = "golaravel_force_delete"
 )
