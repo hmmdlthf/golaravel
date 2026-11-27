@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Validated writes, safe reads.** `Set` rejects values the definition does not allow. A stored value that later becomes invalid, such as a removed enum option, reads as the default and logs a warning.
   - **Fails closed.** Reads and writes without a tenant return `privacy.ErrTenantMissing`. With tenancy bypassed, reads return defaults and writes need `features.ForTenant(ctx, id)`.
   - **For settings pages and clients.** `Manager.All` lists every feature with the tenant's value in one query, `Public` returns only public ones, and the untyped `Manager.Set` parses form and CLI strings. The table is created by `Manager.Migrate` (SQLite, MySQL, Postgres) or by the Ent schema in `pkg/features/schema`.
+  - **Cached reads.** With `Options.Cache` set, each tenant's values are one cache entry, shared across instances when the cache is SQL or Redis. Every write bumps a per-tenant version in the cache key, so a reader that loaded values just before a write can never serve them afterwards. If the cache fails, reads fall back to the database.
+  - **Request memo.** `features.WithMemo(ctx)` loads a tenant's values at most once per request, however many features it checks.
+  - **`Changed` event.** `Set` and `Reset` dispatch `features.changed` with the tenant, key, old and new values, and the actor. A failing listener is logged and does not undo the write.
 - **Offline sync engine, server core (`pkg/offline`)**: push/pull sync for offline-first clients such as POS terminals.
   - **Push is idempotent.** A retried mutation id comes back as a duplicate with its original outcome and is not applied again. Idempotency is per tenant.
   - **Each mutation is atomic.** It is applied in its own transaction together with its row in an append-only ledger. Mutations sharing a `group` are applied all-or-nothing.

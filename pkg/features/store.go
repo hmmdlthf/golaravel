@@ -76,68 +76,31 @@ func writeTenant(ctx context.Context) (string, error) {
 	return id, err
 }
 
-func (s *store) get(ctx context.Context, key string) ([]byte, bool, error) {
-	t, ok, err := tenant(ctx)
-	if err != nil || !ok {
-		return nil, false, err
-	}
-	rows, err := s.db.QueryContext(ctx, s.q("SELECT value FROM "+s.table+" WHERE id = ?"), t+"|"+key)
-	if err != nil {
-		return nil, false, err
-	}
-	defer rows.Close()
-	if !rows.Next() {
-		return nil, false, rows.Err()
-	}
-	var raw string
-	if err := rows.Scan(&raw); err != nil {
-		return nil, false, err
-	}
-	return []byte(raw), true, rows.Close()
-}
-
-func (s *store) all(ctx context.Context) (map[string][]byte, error) {
-	out := map[string][]byte{}
-	t, ok, err := tenant(ctx)
-	if err != nil || !ok {
-		return out, err
-	}
-	rows, err := s.db.QueryContext(ctx, s.q("SELECT name, value FROM "+s.table+" WHERE tenant_id = ?"), t)
+// load returns every stored value of a tenant, name → raw JSON.
+func (s *store) load(ctx context.Context, tenant string) (map[string]string, error) {
+	rows, err := s.db.QueryContext(ctx, s.q("SELECT name, value FROM "+s.table+" WHERE tenant_id = ?"), tenant)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	out := map[string]string{}
 	for rows.Next() {
 		var name, raw string
 		if err := rows.Scan(&name, &raw); err != nil {
 			return nil, err
 		}
-		out[name] = []byte(raw)
+		out[name] = raw
 	}
 	return out, rows.Err()
 }
 
-func (s *store) set(ctx context.Context, m *Manager, key string, raw []byte) error {
-	t, err := writeTenant(ctx)
-	if err != nil {
-		return err
-	}
-	var by any
-	if m.actor != nil {
-		if a := m.actor(ctx); a != "" {
-			by = a
-		}
-	}
-	_, err = s.db.ExecContext(ctx, s.d.Upsert(s.table, "id", "tenant_id", "name", "value", "updated_by", "updated_at"),
-		t+"|"+key, t, key, string(raw), by, m.now().UnixMilli())
+func (s *store) upsert(ctx context.Context, tenant, key, raw string, by any, at int64) error {
+	_, err := s.db.ExecContext(ctx, s.d.Upsert(s.table, "id", "tenant_id", "name", "value", "updated_by", "updated_at"),
+		tenant+"|"+key, tenant, key, raw, by, at)
 	return err
 }
 
-func (s *store) reset(ctx context.Context, _ *Manager, key string) error {
-	t, err := writeTenant(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = s.db.ExecContext(ctx, s.q("DELETE FROM "+s.table+" WHERE id = ?"), t+"|"+key)
+func (s *store) delete(ctx context.Context, tenant, key string) error {
+	_, err := s.db.ExecContext(ctx, s.q("DELETE FROM "+s.table+" WHERE id = ?"), tenant+"|"+key)
 	return err
 }

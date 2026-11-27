@@ -1,6 +1,6 @@
 # Plan: Per-Tenant Features & Settings (`pkg/features`)
 
-Status: Phase 1 done, tests pass on SQLite, 2026-11-27
+Status: Phases 1 and 2 done, 2026-11-27. Tests pass on SQLite, MySQL 8.4, Postgres 17, and with a Redis 7 cache.
 
 Decisions so far: no plan layer in v1, no user layer in v1, explicit tenant
 selection via `features.ForTenant(ctx, id)`, package name `features`.
@@ -109,6 +109,13 @@ Generics make `Bool` return `*Feature[bool]`, `Enum` return
 - Resolver chain: `tenant override → definition default`. The chain is a slice
   of resolvers, so a **plan/edition layer** (`plan override`) can be added
   between them later without changing the API (see open questions).
+
+Phase 2 differs from the sketch above in these ways:
+- The cache uses one key per tenant plus a version number instead of tags.
+  Each write bumps the version, so a value loaded just before a write can't
+  be served after it.
+- The request memo is opt-in through `features.WithMemo(ctx)`. The Phase 3
+  middleware will install it.
 
 ## Integration points
 

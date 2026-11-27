@@ -256,7 +256,7 @@ func (f *Feature[T]) Set(ctx context.Context, v T) error {
 	if err != nil {
 		return fmt.Errorf("%w: %s: %v", ErrInvalidValue, f.meta.Key, err)
 	}
-	return m.store.set(ctx, m, f.meta.Key, raw)
+	return m.write(ctx, f, raw)
 }
 
 // Reset removes the active tenant's value, so it gets the default again.
@@ -265,7 +265,7 @@ func (f *Feature[T]) Reset(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return m.store.reset(ctx, m, f.meta.Key)
+	return m.write(ctx, f, nil)
 }
 
 // Enabled reports whether a bool feature is on for the active tenant. It

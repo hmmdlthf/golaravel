@@ -9,7 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golaravel/golaravel/pkg/cache"
 	"github.com/golaravel/golaravel/pkg/database"
+	"github.com/golaravel/golaravel/pkg/events"
 	"github.com/golaravel/golaravel/pkg/privacy"
 )
 
@@ -31,6 +33,17 @@ type Options struct {
 	// Actor returns the user making a change, stored as updated_by.
 	// Optional.
 	Actor func(ctx context.Context) string
+	// Cache, when set, keeps each tenant's values so reads skip the
+	// database. Writes invalidate it, also across instances sharing a SQL or
+	// Redis cache. Optional.
+	Cache cache.Store
+	// CacheTTL bounds how long a cached tenant entry lives. Defaults to one
+	// hour; it only matters if an invalidation is lost (cache down during a
+	// write).
+	CacheTTL time.Duration
+	// Events receives a Changed event after every Set and Reset. Defaults
+	// to the global dispatcher in pkg/events.
+	Events Dispatcher
 	// Now defaults to time.Now.
 	Now func() time.Time
 	// Logger defaults to slog.Default().
@@ -40,10 +53,14 @@ type Options struct {
 // Manager holds the registered features and resolves their values per
 // tenant.
 type Manager struct {
-	store *store
-	actor func(ctx context.Context) string
-	now   func() time.Time
-	log   *slog.Logger
+	store       *store
+	cache       cache.Store
+	cacheTTL    time.Duration
+	cachePrefix string
+	events      Dispatcher
+	actor       func(ctx context.Context) string
+	now         func() time.Time
+	log         *slog.Logger
 
 	mu   sync.RWMutex
 	defs map[string]Definition
@@ -70,12 +87,22 @@ func New(opts Options) (*Manager, error) {
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
 	}
+	if opts.CacheTTL <= 0 {
+		opts.CacheTTL = time.Hour
+	}
+	if opts.Events == nil {
+		opts.Events = globalEvents{}
+	}
 	return &Manager{
-		store: &store{db: opts.DB, d: opts.Dialect, table: opts.Table},
-		actor: opts.Actor,
-		now:   opts.Now,
-		log:   opts.Logger,
-		defs:  map[string]Definition{},
+		store:       &store{db: opts.DB, d: opts.Dialect, table: opts.Table},
+		cache:       opts.Cache,
+		cacheTTL:    opts.CacheTTL,
+		cachePrefix: "features:" + opts.Table + ":",
+		events:      opts.Events,
+		actor:       opts.Actor,
+		now:         opts.Now,
+		log:         opts.Logger,
+		defs:        map[string]Definition{},
 	}, nil
 }
 
@@ -133,23 +160,15 @@ type Resolved struct {
 // All returns every registered feature with the active tenant's value, in
 // the order of Definitions. It reads the tenant's values in one query.
 func (m *Manager) All(ctx context.Context) ([]Resolved, error) {
-	rows, err := m.store.all(ctx)
+	vals, err := m.values(ctx)
 	if err != nil {
 		return nil, err
 	}
 	metas := m.Definitions()
 	out := make([]Resolved, 0, len(metas))
 	for _, meta := range metas {
-		d := m.lookup(meta.Key)
-		r := Resolved{Meta: meta, Value: d.defaultValue()}
-		if raw, ok := rows[meta.Key]; ok {
-			if v, err := d.decode(raw); err == nil {
-				r.Value, r.Overridden = v, true
-			} else {
-				m.warnInvalid(ctx, meta.Key, err)
-			}
-		}
-		out = append(out, r)
+		v, over := m.pick(ctx, m.lookup(meta.Key), vals)
+		out = append(out, Resolved{Meta: meta, Value: v, Overridden: over})
 	}
 	return out, nil
 }
@@ -191,15 +210,16 @@ func (m *Manager) Set(ctx context.Context, key string, value any) error {
 	if err != nil {
 		return err
 	}
-	return m.store.set(ctx, m, key, raw)
+	return m.write(ctx, d, raw)
 }
 
 // Reset removes the active tenant's value for key.
 func (m *Manager) Reset(ctx context.Context, key string) error {
-	if _, err := m.definition(key); err != nil {
+	d, err := m.definition(key)
+	if err != nil {
 		return err
 	}
-	return m.store.reset(ctx, m, key)
+	return m.write(ctx, d, nil)
 }
 
 // ForTenant returns ctx scoped to tenantID, for reading and changing
@@ -224,17 +244,68 @@ func (m *Manager) definition(key string) (Definition, error) {
 // resolve returns the tenant's value for d and whether it is an override.
 // An invalid stored value falls back to the default.
 func (m *Manager) resolve(ctx context.Context, d Definition) (any, bool, error) {
-	key := d.Meta().Key
-	raw, ok, err := m.store.get(ctx, key)
-	if err != nil || !ok {
+	vals, err := m.values(ctx)
+	if err != nil {
 		return d.defaultValue(), false, err
 	}
-	v, err := d.decode(raw)
+	v, over := m.pick(ctx, d, vals)
+	return v, over, nil
+}
+
+// pick resolves d from a tenant's stored values.
+func (m *Manager) pick(ctx context.Context, d Definition, vals map[string]string) (any, bool) {
+	key := d.Meta().Key
+	raw, ok := vals[key]
+	if !ok {
+		return d.defaultValue(), false
+	}
+	v, err := d.decode([]byte(raw))
 	if err != nil {
 		m.warnInvalid(ctx, key, err)
-		return d.defaultValue(), false, nil
+		return d.defaultValue(), false
 	}
-	return v, true, nil
+	return v, true
+}
+
+// write stores raw as the active tenant's value for d, or deletes it when
+// raw is nil, then invalidates caches and dispatches Changed.
+func (m *Manager) write(ctx context.Context, d Definition, raw []byte) error {
+	t, err := writeTenant(ctx)
+	if err != nil {
+		return err
+	}
+	key := d.Meta().Key
+	old, oldOver, err := m.resolve(ctx, d)
+	if err != nil {
+		return err
+	}
+	var by string
+	if m.actor != nil {
+		by = m.actor(ctx)
+	}
+	if raw == nil {
+		err = m.store.delete(ctx, t, key)
+	} else {
+		var byArg any
+		if by != "" {
+			byArg = by
+		}
+		err = m.store.upsert(ctx, t, key, string(raw), byArg, m.now().UnixMilli())
+	}
+	// Invalidate even on error: the write may have reached the database.
+	m.invalidate(ctx, t)
+	if err != nil {
+		return err
+	}
+	ev := Changed{Tenant: t, Key: key, Old: old, WasOverridden: oldOver, New: d.defaultValue(), By: by, At: m.now()}
+	if raw != nil {
+		ev.New, ev.Overridden = m.pick(ctx, d, map[string]string{key: string(raw)})
+	}
+	if err := m.events.Dispatch(EventChanged, ev); err != nil {
+		// The value is already stored; a failing listener does not undo it.
+		m.log.ErrorContext(ctx, "features: Changed listener failed", "key", key, "tenant", t, "error", err)
+	}
+	return nil
 }
 
 func (m *Manager) warnInvalid(ctx context.Context, key string, err error) {
@@ -242,3 +313,30 @@ func (m *Manager) warnInvalid(ctx context.Context, key string, err error) {
 	m.log.WarnContext(ctx, "features: stored value is invalid, using default",
 		"key", key, "tenant", tenant, "error", err)
 }
+
+// EventChanged is the event name Changed is dispatched under.
+const EventChanged = "features.changed"
+
+// Changed is dispatched after a tenant's value is set or reset.
+type Changed struct {
+	Tenant string
+	Key    string
+	// Old and New are the resolved values before and after (the default
+	// when not overridden).
+	Old, New any
+	// WasOverridden and Overridden say whether the tenant had its own value
+	// before and has one after.
+	WasOverridden, Overridden bool
+	// By is the actor (Options.Actor), if any.
+	By string
+	At time.Time
+}
+
+// Dispatcher receives events. *events.Dispatcher satisfies it.
+type Dispatcher interface {
+	Dispatch(eventName string, payload any) error
+}
+
+type globalEvents struct{}
+
+func (globalEvents) Dispatch(name string, payload any) error { return events.Dispatch(name, payload) }
