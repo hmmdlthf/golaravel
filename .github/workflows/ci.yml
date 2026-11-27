@@ -22,6 +22,29 @@ jobs:
       - name: Test
         run: go test -race -count=1 ./...
 
+  offline-client:
+    name: Offline sync client (TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/offline
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: clients/offline/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: End-to-end against the Go engine
+        run: npm run test:e2e
+      - run: npm run build
+
   integration:
     name: Integration (MySQL, Postgres, Redis)
     runs-on: ubuntu-latest

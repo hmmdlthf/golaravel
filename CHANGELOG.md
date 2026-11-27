@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Required encryption and key rotation.** `RequireEncryption` refuses devices without a key. Server keys rotate by listing old ones after the current one; devices whose key was retired get `403 reregister`.
   - **Device management.** New routes `GET /devices/current` and `DELETE /devices/current` (sign the device out), plus `Engine.Devices` for admin screens. Revoking a device deletes its key.
   - **Ledger compaction.** `Engine.Compact` deletes ledger history older than `Retain` that every active device has already pulled, raising the tenant's horizon first so concurrent pulls can't miss a deleted row. Devices idle longer than `ActiveWithin` no longer hold history back and resync when they return. Run it with `schedule.Call(eng.CompactTask(...)).Daily()` or as an Artisan command through `eng.CompactCLI`.
+- **Offline sync client (`clients/offline`, npm `@golaravel/offline`)**: a TypeScript client for browsers and Tauri apps, with no runtime dependencies.
+  - **Local first.** Reads and writes go to IndexedDB, so the UI never waits on the network.
+  - **Append-only outbox.** Each change is an immutable mutation with a ULID and an HLC timestamp. Pushes are acknowledged per mutation, and a retried push is never applied twice.
+  - **Rebase on pull.** Rows keep the server's confirmed state and replay pending local changes on top. A change the server rejects is undone and kept as a dead letter.
+  - **Groups.** `batch()` sends changes that must apply together, and a group is never split across pushes.
+  - **Encryption (optional).** WebCrypto ECDH/AES-GCM, compatible with the server, with non-extractable keys kept in IndexedDB.
+  - **Sync loop.** Exponential backoff with full jitter, honoring `Retry-After`. Sync runs again when the device comes back online or the tab becomes visible, and only one tab per database runs it.
+  - **Error handling.** Resyncs on `410`, registers again after an unknown device, and stops when the device is revoked.
+  - **Tests.** Unit tests run on fake IndexedDB. End-to-end tests (`npm run test:e2e`) run against the real Go engine, with and without encryption, and both run in CI.
 
 ### Fixed
 - **Security: `privacy.TenantSQLInterceptor` did not filter Ent queries**: it looked for a `WhereP` method, which generated `*XQuery` types don't have (only mutations do), so it skipped the tenant filter without an error and a query in one tenant's context returned other tenants' rows. It now adds `WHERE tenant_id = ?` through the query's generated `Where(...predicate.X)` method, and a query type it cannot filter fails with the new `privacy.ErrTenantScopeUnsupported` instead of running unfiltered. Apps using `TenantSQLInterceptor` should upgrade; `TenantScope` was not affected.

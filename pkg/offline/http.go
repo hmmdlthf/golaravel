@@ -30,7 +30,7 @@ const DeviceHeader = "X-Sync-Device"
 // For a device registered with a public key, push bodies must be
 // Envelopes and push, pull and snapshot responses are Envelopes.
 //
-//	api := app.Group("/api/sync", auth.RequireJWT(jwt), privacy.TenantMiddleware(...))
+//	api := app.Group("/api/sync", auth.BearerGuard(jwt), privacy.TenantMiddleware(...))
 //	eng.Routes(api)
 func (e *Engine[T]) Routes(r router.RouteRegistrar) {
 	h := e.Handlers()
