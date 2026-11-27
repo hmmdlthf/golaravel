@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- **Security: `privacy.TenantSQLInterceptor` did not filter Ent queries**: it looked for a `WhereP` method, which generated `*XQuery` types don't have (only mutations do), so it skipped the tenant filter without an error and a query in one tenant's context returned other tenants' rows. It now adds `WHERE tenant_id = ?` through the query's generated `Where(...predicate.X)` method, and a query type it cannot filter fails with the new `privacy.ErrTenantScopeUnsupported` instead of running unfiltered. Apps using `TenantSQLInterceptor` should upgrade; `TenantScope` was not affected.
+- **`privacy.TenantMutationHook` skipped tenant enforcement without an error**: an update or delete on a mutation without `WhereP` ran without the `tenant_id` filter, and a failed `SetField` on create was ignored, so the row could be saved without the tenant. Both now fail with `ErrTenantScopeUnsupported` before the mutation runs. Generated Ent mutations with `TenantMixin` were not affected.
+
 ## [v1.18.0] - 2026-11-24
 
 ### Added

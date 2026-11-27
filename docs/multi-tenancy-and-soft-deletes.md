@@ -91,14 +91,19 @@ client.Invoice.Intercept(privacy.TenantScope[*InvoiceQuery](func(q *InvoiceQuery
 	q.Where(invoice.TenantEQ(tenantID))
 }))
 
+// Or, without writing a predicate per entity, the generic SQL interceptor
+// (filters on the "tenant_id" column by default; pass another column name):
+client.Invoice.Intercept(privacy.TenantSQLInterceptor())
+
 // Auto-assign tenant_id on Create & prevent cross-tenant Update/Delete:
 client.Invoice.Use(privacy.TenantMutationHook("tenant_id"))
 ```
 
 ### Automatic Tenant Protection Guarantees:
 - **On Query**: If a query is executed without an active tenant in the context, it aborts with `ErrTenantMissing` instead of exposing global data.
+- **Fails closed**: If `TenantSQLInterceptor` is attached to a query type it cannot filter (one without Ent's generated `Where(...predicate.X)` method), the query aborts with `ErrTenantScopeUnsupported` rather than running unfiltered. `TenantScope` is checked at compile time, so prefer it where the extra line per entity is acceptable.
 - **On Create**: The `tenant_id` field is automatically injected into the created entity from the context. If a mismatched tenant ID is provided, it rejects the mutation with `ErrTenantMismatch`.
-- **On Update/Delete**: Automatically appends `WHERE tenant_id = ?` at the storage level.
+- **On Update/Delete**: Automatically appends `WHERE tenant_id = ?` at the storage level. A mutation the hook cannot scope or stamp with the tenant is refused with `ErrTenantScopeUnsupported`.
 
 ---
 
