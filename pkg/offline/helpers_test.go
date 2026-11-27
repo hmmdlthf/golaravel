@@ -13,8 +13,8 @@ import (
 
 	"github.com/golaravel/golaravel/pkg/database"
 	"github.com/golaravel/golaravel/pkg/offline"
-	"github.com/golaravel/golaravel/pkg/offline/internal/testent"
 	"github.com/golaravel/golaravel/pkg/offline/internal/testapp"
+	"github.com/golaravel/golaravel/pkg/offline/internal/testent"
 	"github.com/golaravel/golaravel/pkg/offline/internal/testent/syncledger"
 	"github.com/golaravel/golaravel/pkg/privacy"
 )

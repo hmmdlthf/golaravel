@@ -16,6 +16,7 @@ import (
 	"github.com/golaravel/golaravel/example/app"
 	"github.com/golaravel/golaravel/example/app/handlers"
 	"github.com/golaravel/golaravel/example/app/invoice"
+	"github.com/golaravel/golaravel/example/app/pos"
 	"github.com/golaravel/golaravel/example/app/views"
 	"github.com/golaravel/golaravel/example/database/seeders"
 	"github.com/golaravel/golaravel/pkg/artisan"
@@ -27,6 +28,7 @@ import (
 	"github.com/golaravel/golaravel/pkg/flutter"
 	"github.com/golaravel/golaravel/pkg/golaravel"
 	"github.com/golaravel/golaravel/pkg/middleware"
+	"github.com/golaravel/golaravel/pkg/offline"
 	"github.com/golaravel/golaravel/pkg/router"
 )
 
@@ -121,6 +123,22 @@ func main() {
 	api.GET("/ws", broadcast.WebSocketHandler()).Name("api.ws")
 	api.GET("/broadcast/sse", broadcast.SSEHandler()).Name("api.broadcast.sse")
 
+	// === OFFLINE POINT OF SALE (pkg/offline) ===
+	// Tills sell offline and sync when the network is back: /pos is a demo
+	// till, /api/pos/sync the sync endpoints. Set OFFLINE_SYNC_KEY (from
+	// offline.GenerateServerKey(...).Encode()) to keep encrypted tills
+	// working across restarts.
+	syncKey, err := offlineKey()
+	if err != nil {
+		log.Fatalf("offline sync key: %v", err)
+	}
+	if _, err := pos.Setup(appEngine.Router, client, jwtManager, pos.Options{Keys: []offline.ServerKey{syncKey}}); err != nil {
+		log.Fatalf("offline sync: %v", err)
+	}
+	if err := pos.Seed(ctx, client); err != nil {
+		log.Fatalf("seeding products: %v", err)
+	}
+
 	// === FLUTTER WEB HOSTING (SPA FALLBACK) ===
 	flutter.ServeWeb(appEngine.Router, flutter.Options{
 		MountPath:   "/app",
@@ -150,9 +168,19 @@ func main() {
 	slog.Info("GoLaravel SaaS Showcase Server running",
 		"url", "http://localhost"+port,
 		"sample_invoice_url", "http://localhost"+port+"/invoice/"+sampleToken,
+		"offline_till", "http://localhost"+port+"/pos",
 	)
 
 	if err := appEngine.Run(port); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
+}
+
+// offlineKey loads the sync server key from OFFLINE_SYNC_KEY, or makes a
+// throwaway one (encrypted tills then re-register after a restart).
+func offlineKey() (offline.ServerKey, error) {
+	if enc := os.Getenv("OFFLINE_SYNC_KEY"); enc != "" {
+		return offline.ParseServerKey("k1", enc)
+	}
+	return offline.GenerateServerKey("dev")
 }

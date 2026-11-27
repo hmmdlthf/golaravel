@@ -12,5 +12,23 @@ type Invoice func(*sql.Selector)
 // LineItem is the predicate function for lineitem builders.
 type LineItem func(*sql.Selector)
 
+// Product is the predicate function for product builders.
+type Product func(*sql.Selector)
+
+// Sale is the predicate function for sale builders.
+type Sale func(*sql.Selector)
+
+// SaleLine is the predicate function for saleline builders.
+type SaleLine func(*sql.Selector)
+
+// SyncDevice is the predicate function for syncdevice builders.
+type SyncDevice func(*sql.Selector)
+
+// SyncLedger is the predicate function for syncledger builders.
+type SyncLedger func(*sql.Selector)
+
+// SyncTenant is the predicate function for synctenant builders.
+type SyncTenant func(*sql.Selector)
+
 // User is the predicate function for user builders.
 type User func(*sql.Selector)

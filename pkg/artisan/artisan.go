@@ -173,6 +173,12 @@ func (r *Registry) registerDefaults() {
 	})
 
 	r.Register(&Command{
+		Name:        "make:syncable",
+		Description: "Scaffold an offline-synced entity (Ent schema + offline.Resource)",
+		Run:         func(args []string) error { return RunMakeSyncable(args) },
+	})
+
+	r.Register(&Command{
 		Name:        "make:scope",
 		Description: "Create a global Ent query scope (app/scopes/<name>_scope.go)",
 		Run:         makeScope,

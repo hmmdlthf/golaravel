@@ -104,6 +104,7 @@ Explore the in-depth documentation guides in [`docs/`](./docs/):
 - 🎲 **[Ent Model Factories & Faker Data Seeder](./docs/model-factories-and-faker.md)**
 - 🛡️ **[Multi-Tenancy Privacy Scopes & Soft Deletes](./docs/multi-tenancy-and-soft-deletes.md)**
 - 🎛️ **[Per-Tenant Features & Settings](./docs/tenant-features-and-settings.md)**
+- 📴 **[Offline-First Sync (POS & Field Apps)](./docs/offline-sync.md)**
 - 🎨 **[Templating with Templ (Blade Equivalent)](./docs/templ-views.md)**
 - 📱 **[Flutter Multiplatform & Hybrid Serving](./docs/flutter-multiplatform.md)**
 - ⚛️ **[Inertia.js Protocol Adapter](./docs/inertia.md)**

@@ -59,6 +59,7 @@ All generators place files in deterministic directories:
 | `artisan make:mail <Name> [--view]` | `app/mail/<name>_mail.go` | Creates a Mailable struct with optional companion Templ view |
 | `artisan make:policy <Name>` | `app/policies/<name>_policy.go` | Creates an authorization policy |
 | `artisan make:scope <Name>` | `app/scopes/<name>_scope.go` | Creates a global Ent query scope |
+| `artisan make:syncable <Name> [field:type ...]` | `app/schema/<name>.go`, `app/synced/<name>.go` | Scaffolds an offline-synced entity: Ent schema with the sync, tenant and soft-delete mixins, and its `offline.Resource` (see [Offline-First Sync](./offline-sync.md)) |
 | `artisan make:middleware <Name>`| `app/middleware/<name>.go` | Creates custom HTTP middleware |
 | `artisan make:limiter <Name>`   | `app/limiters/<name>_limiter.go` | Creates a named sliding-window rate limiter |
 | `artisan make:migration <Name>`| `database/migrations/<timestamp>_<name>.sql` | Creates a new Atlas versioned migration |

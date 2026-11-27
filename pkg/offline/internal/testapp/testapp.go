@@ -103,9 +103,8 @@ func Product(beforeApply func() error) offline.Resource[*testent.Tx] {
 					u.SetPrice(*f.Price)
 				}
 				if f.Stock != nil {
-					u.SetStock(*f.Stock)
-				}
-				if d, ok := w.Inc["stock"]; ok {
+					u.SetStock(*f.Stock + w.Inc["stock"])
+				} else if d, ok := w.Inc["stock"]; ok {
 					u.AddStock(d)
 				}
 				return u.Exec(ctx)
@@ -113,4 +112,3 @@ func Product(beforeApply func() error) offline.Resource[*testent.Tx] {
 		},
 	}
 }
-

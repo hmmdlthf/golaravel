@@ -7,7 +7,13 @@ import (
 
 	"github.com/golaravel/golaravel/example/app/invoice"
 	"github.com/golaravel/golaravel/example/app/lineitem"
+	"github.com/golaravel/golaravel/example/app/product"
+	"github.com/golaravel/golaravel/example/app/sale"
+	"github.com/golaravel/golaravel/example/app/saleline"
 	"github.com/golaravel/golaravel/example/app/schema"
+	"github.com/golaravel/golaravel/example/app/syncdevice"
+	"github.com/golaravel/golaravel/example/app/syncledger"
+	"github.com/golaravel/golaravel/example/app/synctenant"
 	"github.com/golaravel/golaravel/example/app/user"
 )
 
@@ -67,6 +73,179 @@ func init() {
 	lineitemDescTotal := lineitemFields[3].Descriptor()
 	// lineitem.DefaultTotal holds the default value on creation for the total field.
 	lineitem.DefaultTotal = lineitemDescTotal.Default.(float64)
+	productMixin := schema.Product{}.Mixin()
+	productMixinFields0 := productMixin[0].Fields()
+	_ = productMixinFields0
+	productMixinFields1 := productMixin[1].Fields()
+	_ = productMixinFields1
+	productFields := schema.Product{}.Fields()
+	_ = productFields
+	// productDescSyncVersion is the schema descriptor for sync_version field.
+	productDescSyncVersion := productMixinFields0[1].Descriptor()
+	// product.DefaultSyncVersion holds the default value on creation for the sync_version field.
+	product.DefaultSyncVersion = productDescSyncVersion.Default.(int64)
+	// productDescSyncHlc is the schema descriptor for sync_hlc field.
+	productDescSyncHlc := productMixinFields0[2].Descriptor()
+	// product.DefaultSyncHlc holds the default value on creation for the sync_hlc field.
+	product.DefaultSyncHlc = productDescSyncHlc.Default.(string)
+	// productDescTenantID is the schema descriptor for tenant_id field.
+	productDescTenantID := productMixinFields1[0].Descriptor()
+	// product.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	product.TenantIDValidator = productDescTenantID.Validators[0].(func(string) error)
+	// productDescName is the schema descriptor for name field.
+	productDescName := productFields[0].Descriptor()
+	// product.DefaultName holds the default value on creation for the name field.
+	product.DefaultName = productDescName.Default.(string)
+	// productDescSku is the schema descriptor for sku field.
+	productDescSku := productFields[1].Descriptor()
+	// product.DefaultSku holds the default value on creation for the sku field.
+	product.DefaultSku = productDescSku.Default.(string)
+	// productDescPrice is the schema descriptor for price field.
+	productDescPrice := productFields[2].Descriptor()
+	// product.DefaultPrice holds the default value on creation for the price field.
+	product.DefaultPrice = productDescPrice.Default.(int64)
+	// productDescStock is the schema descriptor for stock field.
+	productDescStock := productFields[3].Descriptor()
+	// product.DefaultStock holds the default value on creation for the stock field.
+	product.DefaultStock = productDescStock.Default.(float64)
+	// productDescID is the schema descriptor for id field.
+	productDescID := productMixinFields0[0].Descriptor()
+	// product.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	product.IDValidator = func() func(string) error {
+		validators := productDescID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(id string) error {
+			for _, fn := range fns {
+				if err := fn(id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	saleMixin := schema.Sale{}.Mixin()
+	saleMixinFields0 := saleMixin[0].Fields()
+	_ = saleMixinFields0
+	saleMixinFields1 := saleMixin[1].Fields()
+	_ = saleMixinFields1
+	saleFields := schema.Sale{}.Fields()
+	_ = saleFields
+	// saleDescSyncVersion is the schema descriptor for sync_version field.
+	saleDescSyncVersion := saleMixinFields0[1].Descriptor()
+	// sale.DefaultSyncVersion holds the default value on creation for the sync_version field.
+	sale.DefaultSyncVersion = saleDescSyncVersion.Default.(int64)
+	// saleDescSyncHlc is the schema descriptor for sync_hlc field.
+	saleDescSyncHlc := saleMixinFields0[2].Descriptor()
+	// sale.DefaultSyncHlc holds the default value on creation for the sync_hlc field.
+	sale.DefaultSyncHlc = saleDescSyncHlc.Default.(string)
+	// saleDescTenantID is the schema descriptor for tenant_id field.
+	saleDescTenantID := saleMixinFields1[0].Descriptor()
+	// sale.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	sale.TenantIDValidator = saleDescTenantID.Validators[0].(func(string) error)
+	// saleDescTotal is the schema descriptor for total field.
+	saleDescTotal := saleFields[0].Descriptor()
+	// sale.DefaultTotal holds the default value on creation for the total field.
+	sale.DefaultTotal = saleDescTotal.Default.(int64)
+	// saleDescNote is the schema descriptor for note field.
+	saleDescNote := saleFields[2].Descriptor()
+	// sale.DefaultNote holds the default value on creation for the note field.
+	sale.DefaultNote = saleDescNote.Default.(string)
+	// saleDescID is the schema descriptor for id field.
+	saleDescID := saleMixinFields0[0].Descriptor()
+	// sale.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	sale.IDValidator = func() func(string) error {
+		validators := saleDescID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(id string) error {
+			for _, fn := range fns {
+				if err := fn(id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	salelineMixin := schema.SaleLine{}.Mixin()
+	salelineMixinFields0 := salelineMixin[0].Fields()
+	_ = salelineMixinFields0
+	salelineMixinFields1 := salelineMixin[1].Fields()
+	_ = salelineMixinFields1
+	salelineFields := schema.SaleLine{}.Fields()
+	_ = salelineFields
+	// salelineDescSyncVersion is the schema descriptor for sync_version field.
+	salelineDescSyncVersion := salelineMixinFields0[1].Descriptor()
+	// saleline.DefaultSyncVersion holds the default value on creation for the sync_version field.
+	saleline.DefaultSyncVersion = salelineDescSyncVersion.Default.(int64)
+	// salelineDescSyncHlc is the schema descriptor for sync_hlc field.
+	salelineDescSyncHlc := salelineMixinFields0[2].Descriptor()
+	// saleline.DefaultSyncHlc holds the default value on creation for the sync_hlc field.
+	saleline.DefaultSyncHlc = salelineDescSyncHlc.Default.(string)
+	// salelineDescTenantID is the schema descriptor for tenant_id field.
+	salelineDescTenantID := salelineMixinFields1[0].Descriptor()
+	// saleline.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	saleline.TenantIDValidator = salelineDescTenantID.Validators[0].(func(string) error)
+	// salelineDescSaleID is the schema descriptor for sale_id field.
+	salelineDescSaleID := salelineFields[0].Descriptor()
+	// saleline.DefaultSaleID holds the default value on creation for the sale_id field.
+	saleline.DefaultSaleID = salelineDescSaleID.Default.(string)
+	// salelineDescProductID is the schema descriptor for product_id field.
+	salelineDescProductID := salelineFields[1].Descriptor()
+	// saleline.DefaultProductID holds the default value on creation for the product_id field.
+	saleline.DefaultProductID = salelineDescProductID.Default.(string)
+	// salelineDescQty is the schema descriptor for qty field.
+	salelineDescQty := salelineFields[2].Descriptor()
+	// saleline.DefaultQty holds the default value on creation for the qty field.
+	saleline.DefaultQty = salelineDescQty.Default.(float64)
+	// salelineDescPrice is the schema descriptor for price field.
+	salelineDescPrice := salelineFields[3].Descriptor()
+	// saleline.DefaultPrice holds the default value on creation for the price field.
+	saleline.DefaultPrice = salelineDescPrice.Default.(int64)
+	// salelineDescID is the schema descriptor for id field.
+	salelineDescID := salelineMixinFields0[0].Descriptor()
+	// saleline.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	saleline.IDValidator = func() func(string) error {
+		validators := salelineDescID.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(id string) error {
+			for _, fn := range fns {
+				if err := fn(id); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	syncdeviceFields := schema.SyncDevice{}.Fields()
+	_ = syncdeviceFields
+	// syncdeviceDescCursorSeq is the schema descriptor for cursor_seq field.
+	syncdeviceDescCursorSeq := syncdeviceFields[7].Descriptor()
+	// syncdevice.DefaultCursorSeq holds the default value on creation for the cursor_seq field.
+	syncdevice.DefaultCursorSeq = syncdeviceDescCursorSeq.Default.(int64)
+	syncledgerFields := schema.SyncLedger{}.Fields()
+	_ = syncledgerFields
+	// syncledgerDescSeq is the schema descriptor for seq field.
+	syncledgerDescSeq := syncledgerFields[3].Descriptor()
+	// syncledger.DefaultSeq holds the default value on creation for the seq field.
+	syncledger.DefaultSeq = syncledgerDescSeq.Default.(int64)
+	synctenantFields := schema.SyncTenant{}.Fields()
+	_ = synctenantFields
+	// synctenantDescSeq is the schema descriptor for seq field.
+	synctenantDescSeq := synctenantFields[1].Descriptor()
+	// synctenant.DefaultSeq holds the default value on creation for the seq field.
+	synctenant.DefaultSeq = synctenantDescSeq.Default.(int64)
+	// synctenantDescHorizon is the schema descriptor for horizon field.
+	synctenantDescHorizon := synctenantFields[2].Descriptor()
+	// synctenant.DefaultHorizon holds the default value on creation for the horizon field.
+	synctenant.DefaultHorizon = synctenantDescHorizon.Default.(int64)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescName is the schema descriptor for name field.
