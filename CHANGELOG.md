@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.21.0] - 2026-11-27
 
 ### Added
 - **`artisan make:syncable <Name> [field:type ...]`**: scaffolds an offline-synced entity.
