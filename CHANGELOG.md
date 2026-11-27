@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.20.0] - 2026-11-27
 
 ### Added
 - **Offline sync for Flutter (`clients/flutter`, `SyncClient`)**: a Dart port of `@golaravel/offline` with the same wire protocol, for Android, iOS, desktop and web.
