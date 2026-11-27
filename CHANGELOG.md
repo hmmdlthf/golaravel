@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Offline sync for Flutter (`clients/flutter`, `SyncClient`)**: a Dart port of `@golaravel/offline` with the same wire protocol, for Android, iOS, desktop and web.
+  - **Same model as the TypeScript client.** A local SQLite store (drift, raw SQL, no code generation) with an append-only outbox, ULIDs, hybrid logical clocks, rebase on pull, groups that are never split across pushes, dead letters, snapshots and `410` resyncs, re-registration, and revocation.
+  - **Optional encryption.** P-256 ECDH, HKDF-SHA256 and AES-256-GCM in pure Dart (pointycastle).
+  - **Flutter-friendly API.** `status` is a `ValueListenable`, `table(...).watch()` is a stream for `StreamBuilder`, there is a `rejected` stream, and sync runs again when the app resumes.
+  - **Device keys stay out of the database.** On Android, iOS and desktop they go to the platform keystore (`flutter_secure_storage`). On web, WebCrypto keeps them as non-extractable `CryptoKey`s in IndexedDB, like the TypeScript client. Keys an earlier build stored in the database are migrated and deleted. `keyVault:` accepts a custom store.
+  - **Tested end to end.**
+    - The fake-server suite was ported from TypeScript.
+    - End-to-end tests run against the real Go engine in plaintext and encrypted mode.
+    - A cross-client test has a TypeScript client and a Dart client sync one tenant through the Go server: shared creates and deletes, counter deltas that add up, field-level merges, and group rejection.
+    - In Chrome, a web suite runs SQLite in WebAssembly on IndexedDB (data survives a reload) and checks the WebCrypto vault: keys are non-extractable and match the pure-Dart cipher.
 - **Features endpoint (`pkg/features`)**: `mgr.Handler()` serves the tenant's `Public` features as `{"features": {...}}` for browsers, offline clients and mobile apps. Responses carry an `ETag`, and a matching `If-None-Match` gets `304` with no body, so polling is cheap. `Cache-Control: private, no-cache` keeps shared caches out. A request with no tenant gets `403`.
 - **`FeatureClient` (`@golaravel/offline`)**: reads the endpoint and keeps the last known features in `localStorage` (or your own storage), so an offline device still knows which features are on. Reads are synchronous. A feature never seen is off. The client revalidates with the ETag, polls every 60 s, refreshes when the device comes online or the tab is shown, and emits `change` and `error`. End-to-end tests run it against the real Go handler.
 - **Flutter client (`clients/flutter`, Dart package `golaravel`)**: GoLaravel's first Dart package, for Android, iOS, desktop and web. Its `FeatureClient` matches the TypeScript one. It caches with `shared_preferences`, revalidates with the ETag, polls, refreshes when the app returns to the foreground, and is a `ChangeNotifier` with `changes` and `errors` streams. Unit tests and an end-to-end test against the real Go handler run in CI.

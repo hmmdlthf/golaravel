@@ -59,12 +59,24 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: clients/offline/package-lock.json
+      - name: Install the TypeScript client (for the cross-client test)
+        run: npm ci
+        working-directory: clients/offline
       - run: flutter pub get
       - run: flutter analyze
-      - name: Test (unit and end-to-end against the Go handler)
+      - name: Test (unit, end-to-end against the Go server, cross-client with TypeScript)
         run: flutter test
         env:
           GOLARAVEL_E2E: "1"
+      - name: Web (Chrome) - WASM SQLite storage, WebCrypto key vault, logic
+        run: |
+          ./tool/web_test_assets.sh
+          flutter test --platform chrome test/web_storage_test.dart test/web_key_vault_test.dart test/web_logic_test.dart test/features_test.dart test/native_key_vault_test.dart
 
   integration:
     name: Integration (MySQL, Postgres, Redis)
