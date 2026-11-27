@@ -7,7 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.19.0] - 2026-11-27
+
+### Added
+- **Per-tenant features and settings (`pkg/features`)**: optional features and multi-choice settings with a default in code and an override per tenant.
+  - **Typed definitions.** `features.Bool`, `Enum`, `Int`, `String` and `JSON[T]` declare a key, a default and metadata (label, group, `ManagedBy(SuperAdmin|TenantAdmin)`, `Public`). `Rules(features.Range(1, 50))` and `MaxLen` add checks.
+  - **Defaults in code, overrides in `tenant_settings`.** A tenant has a row only when it differs from the default, and `Reset` deletes it. Adding a feature needs no migration or seeding.
+  - **Validated writes, safe reads.** `Set` rejects values the definition does not allow. A stored value that later becomes invalid, such as a removed enum option, reads as the default and logs a warning.
+  - **Fails closed.** Reads and writes without a tenant return `privacy.ErrTenantMissing`. With tenancy bypassed, reads return defaults and writes need `features.ForTenant(ctx, id)`.
+  - **For settings pages and clients.** `Manager.All` lists every feature with the tenant's value in one query, `Public` returns only public ones, and the untyped `Manager.Set` parses form and CLI strings. The table is created by `Manager.Migrate` (SQLite, MySQL, Postgres) or by the Ent schema in `pkg/features/schema`.
+  - **Cached reads.** With `Options.Cache` set, each tenant's values are one cache entry, shared across instances when the cache is SQL or Redis. Every write bumps a per-tenant version in the cache key, so a reader that loaded values just before a write can never serve them afterwards. If the cache fails, reads fall back to the database.
+  - **Request memo.** `features.WithMemo(ctx)` loads a tenant's values at most once per request, however many features it checks.
+  - **HTTP and Inertia.** `features.Require(f)` and `RequireValue(f, allowed)` let a request through only when the feature is on, or has an allowed value, for its tenant. Otherwise they respond `404` by default, or as set by `DeniedStatus`/`OnDenied`. They fail closed: `403` with no tenant, `500` on a lookup error. `features.Middleware()` installs the request memo, and `mgr.InertiaProp()` shares a tenant's public features with `inertia.Engine.ShareFunc`, a new way to share props computed per request.
+  - **Artisan commands.** `features.NewCLI(mgr, out).Commands()` provides `features:list [--tenant=]`, `features:set`, `features:reset` and `features:prune [--dry-run]`, which deletes stored values of features no longer in code.
+  - **Testing.** `features.Fake(ctx, values)` forces values for faked keys without a database or tenant. Unfaked keys still need a tenant. `features.NewInMemory` gives a manager with no database.
+  - **`Changed` event.** `Set` and `Reset` dispatch `features.changed` with the tenant, key, old and new values, and the actor. A failing listener is logged and does not undo the write.
+- **Offline sync engine, server core (`pkg/offline`)**: push/pull sync for offline-first clients such as POS terminals.
+  - **Push is idempotent.** A retried mutation id comes back as a duplicate with its original outcome and is not applied again. Idempotency is per tenant.
+  - **Each mutation is atomic.** It is applied in its own transaction together with its row in an append-only ledger. Mutations sharing a `group` are applied all-or-nothing.
+  - **Transient failures keep order.** One stops the batch, and that mutation and everything after it come back as `retry`. Permanent ones come back as `rejected`, with the server's current record so the client can undo its local change.
+  - **Pull cannot skip a change.** It returns each changed entity once, in its current state or as a tombstone, after a cursor. A per-tenant sequence lock makes ledger rows commit in order, so a change that commits late is never missed.
+  - **Snapshots and resyncs.** `Snapshot` pages through an entity for first-time loading, and a cursor older than the retained history gets `410 resync_required`.
+  - **Conflicts are settled with hybrid logical clocks.** Strategies: `FieldLWW` (default), `LWW`, `ServerWins`, `ClientWins`, or a custom `Resolver`. Counter fields take `inc` deltas that add up across devices. Device clocks too far ahead are replaced with server time.
+  - **Admin edits reach devices.** `offline.ChangeHook` records writes made outside sync (admin panel, jobs) and stamps them with the server clock, so devices pull them and older offline edits don't overwrite them.
+  - **HTTP endpoints and storage.** Devices are registered per tenant and can be revoked. The endpoints are `POST /devices`, `POST /push`, `GET /pull` and `GET /snapshot`. Tables are created by `Engine.Migrate` (SQLite, MySQL, Postgres) or by the Ent schemas in `pkg/offline/schema`, which also provides `SyncableMixin`. Ent apps enable the `sql/execquery` feature so resources write through their own `*ent.Tx`.
+- **Offline sync: encryption, revocation, compaction (`pkg/offline`)**:
+  - **Optional payload encryption.** With `Options.Keys` set, a device can register an ECDH P-256 public key. Both sides derive a per-device AES-256-GCM key (HKDF-SHA256, salted with the device id). From then on its push bodies and its push, pull and snapshot responses travel as `Envelope`s. The authenticated data binds each envelope to its direction, endpoint, tenant and device, and plaintext requests from an encrypting device are refused, so a leaked device id is not enough to push.
+  - **Required encryption and key rotation.** `RequireEncryption` refuses devices without a key. Server keys rotate by listing old ones after the current one; devices whose key was retired get `403 reregister`.
+  - **Device management.** New routes `GET /devices/current` and `DELETE /devices/current` (sign the device out), plus `Engine.Devices` for admin screens. Revoking a device deletes its key.
+  - **Ledger compaction.** `Engine.Compact` deletes ledger history older than `Retain` that every active device has already pulled, raising the tenant's horizon first so concurrent pulls can't miss a deleted row. Devices idle longer than `ActiveWithin` no longer hold history back and resync when they return. Run it with `schedule.Call(eng.CompactTask(...)).Daily()` or as an Artisan command through `eng.CompactCLI`.
+- **Offline sync client (`clients/offline`, npm `@golaravel/offline`)**: a TypeScript client for browsers and Tauri apps, with no runtime dependencies.
+  - **Local first.** Reads and writes go to IndexedDB, so the UI never waits on the network.
+  - **Append-only outbox.** Each change is an immutable mutation with a ULID and an HLC timestamp. Pushes are acknowledged per mutation, and a retried push is never applied twice.
+  - **Rebase on pull.** Rows keep the server's confirmed state and replay pending local changes on top. A change the server rejects is undone and kept as a dead letter.
+  - **Groups.** `batch()` sends changes that must apply together, and a group is never split across pushes.
+  - **Encryption (optional).** WebCrypto ECDH/AES-GCM, compatible with the server, with non-extractable keys kept in IndexedDB.
+  - **Sync loop.** Exponential backoff with full jitter, honoring `Retry-After`. Sync runs again when the device comes back online or the tab becomes visible, and only one tab per database runs it.
+  - **Error handling.** Resyncs on `410`, registers again after an unknown device, and stops when the device is revoked.
+  - **Tests.** Unit tests run on fake IndexedDB. End-to-end tests (`npm run test:e2e`) run against the real Go engine, with and without encryption, and both run in CI.
 
 ### Fixed
 - **Security: `privacy.TenantSQLInterceptor` did not filter Ent queries**: it looked for a `WhereP` method, which generated `*XQuery` types don't have (only mutations do), so it skipped the tenant filter without an error and a query in one tenant's context returned other tenants' rows. It now adds `WHERE tenant_id = ?` through the query's generated `Where(...predicate.X)` method, and a query type it cannot filter fails with the new `privacy.ErrTenantScopeUnsupported` instead of running unfiltered. Apps using `TenantSQLInterceptor` should upgrade; `TenantScope` was not affected.

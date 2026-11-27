@@ -97,3 +97,27 @@ func TestInertia_VersionConflict(t *testing.T) {
 		t.Fatalf("expected X-Inertia-Location /settings, got %s", w.Header().Get(HeaderInertiaLocation))
 	}
 }
+
+func TestInertia_ShareFunc(t *testing.T) {
+	engine := New("1.0.0")
+	engine.Share("plan", "static")
+	engine.ShareFunc("plan", func(c *context.Context) any { return "per-request" })
+	engine.ShareFunc("path", func(c *context.Context) any { return c.Request.URL.Path })
+	engine.ShareFunc("count", func(c *context.Context) any { return "shared" })
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/users", nil)
+	req.Header.Set(HeaderInertia, "true")
+	c := context.NewContext()
+	c.Reset(w, req)
+	if err := engine.Render(c, http.StatusOK, "Users/Index", map[string]any{"count": 42}); err != nil {
+		t.Fatal(err)
+	}
+	var page Page
+	if err := json.Unmarshal(w.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Props["plan"] != "per-request" || page.Props["path"] != "/users" || page.Props["count"] != float64(42) {
+		t.Fatalf("props = %v", page.Props)
+	}
+}
