@@ -10,6 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Per-tenant features and settings (`pkg/features`)**: optional features and multi-choice settings with a default in code and an override per tenant.
+  - **Typed definitions.** `features.Bool`, `Enum`, `Int`, `String` and `JSON[T]` declare a key, a default and metadata (label, group, `ManagedBy(SuperAdmin|TenantAdmin)`, `Public`). `Rules(features.Range(1, 50))` and `MaxLen` add checks.
+  - **Defaults in code, overrides in `tenant_settings`.** A tenant has a row only when it differs from the default, and `Reset` deletes it. Adding a feature needs no migration or seeding.
+  - **Validated writes, safe reads.** `Set` rejects values the definition does not allow. A stored value that later becomes invalid, such as a removed enum option, reads as the default and logs a warning.
+  - **Fails closed.** Reads and writes without a tenant return `privacy.ErrTenantMissing`. With tenancy bypassed, reads return defaults and writes need `features.ForTenant(ctx, id)`.
+  - **For settings pages and clients.** `Manager.All` lists every feature with the tenant's value in one query, `Public` returns only public ones, and the untyped `Manager.Set` parses form and CLI strings. The table is created by `Manager.Migrate` (SQLite, MySQL, Postgres) or by the Ent schema in `pkg/features/schema`.
 - **Offline sync engine, server core (`pkg/offline`)**: push/pull sync for offline-first clients such as POS terminals.
   - **Push is idempotent.** A retried mutation id comes back as a duplicate with its original outcome and is not applied again. Idempotency is per tenant.
   - **Each mutation is atomic.** It is applied in its own transaction together with its row in an append-only ledger. Mutations sharing a `group` are applied all-or-nothing.
