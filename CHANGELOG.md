@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.22.0] - 2026-11-27
+
+### Added
+- **Laravel-style file uploads.**
+  - `c.File("avatar")`, `c.Files("photos")`, `c.HasFile` and `c.AllFiles` return `*storage.UploadedFile` (`golaravel.UploadedFile`).
+  - `UploadedFile` methods:
+    - `Store`, `StoreAs`, `StorePublicly` and `StorePubliclyAs`;
+    - `HashName`;
+    - `ClientOriginalName`, `ClientOriginalExtension` and `ClientMimeType`;
+    - `MimeType` and `Extension`, both detected from the file's bytes;
+    - `Size`, `IsValid`, `Open` and `Bytes`.
+  - `Storage.PutFile`, `Storage.PutFileAs` and `Storage.DeleteMany`.
+  - Validation rules accept `*UploadedFile` values.
+- **`app.ServeStorage()`** serves the local disks at their URLs (`storage.Handler()` without the engine):
+  - public files to anyone;
+  - private files through `TemporaryURL` links;
+  - direct uploads through `PresignedPutURL` links.
+  - Responses send `nosniff` and a sandboxing CSP. HTML, SVG and XML are always downloaded, and dotfiles and directories get 404.
+- **Disk visibility**:
+  - `storage.Visibility(disk)` and `Storage.DisplayURL(path, ttl, disk)`;
+  - `LocalDriver.SetVisibility`, and `S3Config.Visibility` (`AWS_VISIBILITY`);
+  - the `public` disk is public.
+- **`middleware.MaxBodySize(n)`** gives one route its own body limit, larger or smaller than `app.MaxBodyBytes`.
+- **Test fakes**:
+  - `gltest.FakeStorage(t, disk)`, an in-memory disk with `AssertExists`, `AssertMissing`, `AssertCount` and `AssertDirectoryEmpty`;
+  - `gltest.FakeImage(name, w, h)` and `gltest.FakeUpload(name, kb)`;
+  - `.UploadedFile()` and the request builder's `WithUpload`;
+  - `storage.MemoryDriver` and `storage.Swap`.
+
+### Changed
+- **Method spoofing no longer parses whole multipart bodies before routing.** It reads only the fields before the first file, at most 64 KB, then replays them. Large uploads are left for the route, so its body limit applies.
+- **The engine's body cap is now `middleware.LimitedBody`.** It still fails with `*http.MaxBytesError`.
+- **`WithFile` in tests now sends the content type it is given.** It used to always send `application/octet-stream`.
+
+---
+
 ## [v1.21.0] - 2026-11-27
 
 ### Added
