@@ -1,6 +1,6 @@
 # Plan: Per-Tenant Features & Settings (`pkg/features`)
 
-Status: Phases 1–3 done, 2026-11-27. Tests pass on SQLite, MySQL 8.4, Postgres 17, and with a Redis 7 cache.
+Status: Phases 1–3 done 2026-11-27 and released in v1.19.0. Tests pass on SQLite, MySQL 8.4, Postgres 17, and with a Redis 7 cache. Phase 4 (GoFilament settings page, super-admin screen, visibility helpers) is built in GoFilament.
 
 Decisions so far: no plan layer in v1, no user layer in v1, explicit tenant
 selection via `features.ForTenant(ctx, id)`, package name `features`.

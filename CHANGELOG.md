@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [v1.19.0] - 2026-11-27
 
 ### Added
 - **Per-tenant features and settings (`pkg/features`)**: optional features and multi-choice settings with a default in code and an override per tenant.
