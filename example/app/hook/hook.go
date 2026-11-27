@@ -33,6 +33,78 @@ func (f LineItemFunc) Mutate(ctx context.Context, m app.Mutation) (app.Value, er
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *app.LineItemMutation", m)
 }
 
+// The ProductFunc type is an adapter to allow the use of ordinary
+// function as Product mutator.
+type ProductFunc func(context.Context, *app.ProductMutation) (app.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ProductFunc) Mutate(ctx context.Context, m app.Mutation) (app.Value, error) {
+	if mv, ok := m.(*app.ProductMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *app.ProductMutation", m)
+}
+
+// The SaleFunc type is an adapter to allow the use of ordinary
+// function as Sale mutator.
+type SaleFunc func(context.Context, *app.SaleMutation) (app.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SaleFunc) Mutate(ctx context.Context, m app.Mutation) (app.Value, error) {
+	if mv, ok := m.(*app.SaleMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *app.SaleMutation", m)
+}
+
+// The SaleLineFunc type is an adapter to allow the use of ordinary
+// function as SaleLine mutator.
+type SaleLineFunc func(context.Context, *app.SaleLineMutation) (app.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SaleLineFunc) Mutate(ctx context.Context, m app.Mutation) (app.Value, error) {
+	if mv, ok := m.(*app.SaleLineMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *app.SaleLineMutation", m)
+}
+
+// The SyncDeviceFunc type is an adapter to allow the use of ordinary
+// function as SyncDevice mutator.
+type SyncDeviceFunc func(context.Context, *app.SyncDeviceMutation) (app.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SyncDeviceFunc) Mutate(ctx context.Context, m app.Mutation) (app.Value, error) {
+	if mv, ok := m.(*app.SyncDeviceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *app.SyncDeviceMutation", m)
+}
+
+// The SyncLedgerFunc type is an adapter to allow the use of ordinary
+// function as SyncLedger mutator.
+type SyncLedgerFunc func(context.Context, *app.SyncLedgerMutation) (app.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SyncLedgerFunc) Mutate(ctx context.Context, m app.Mutation) (app.Value, error) {
+	if mv, ok := m.(*app.SyncLedgerMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *app.SyncLedgerMutation", m)
+}
+
+// The SyncTenantFunc type is an adapter to allow the use of ordinary
+// function as SyncTenant mutator.
+type SyncTenantFunc func(context.Context, *app.SyncTenantMutation) (app.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SyncTenantFunc) Mutate(ctx context.Context, m app.Mutation) (app.Value, error) {
+	if mv, ok := m.(*app.SyncTenantMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *app.SyncTenantMutation", m)
+}
+
 // The UserFunc type is an adapter to allow the use of ordinary
 // function as User mutator.
 type UserFunc func(context.Context, *app.UserMutation) (app.Value, error)

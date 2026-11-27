@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **`artisan make:syncable <Name> [field:type ...]`**: scaffolds an offline-synced entity.
+  - **Ent schema** with `SyncableMixin`, `TenantMixin` and `SoftDeleteMixin`.
+  - **Resource** (`app/synced/<name>.go`): an `offline.Resource` that loads, snapshots and applies the entity through the generated Ent client.
+  - **Field types:** `string`, `text`, `int`, `int64`, `float`, `bool`, `time` and `counter`. A `counter` takes deltas, so concurrent sales add up.
+  - **Ent setup:** it adds `--feature sql/execquery` to `app/generate.go`.
+- **Offline point of sale in the example app**: products, sales and sale lines generated with `make:syncable`.
+  - **Shop rules** (`example/app/pos`): sales are immutable, and prices and quantities can't be negative.
+  - **Sync endpoints** at `/api/pos/sync`, with the tenant taken from the login token's new `tenant_id` claim.
+  - **Demo till** at `/pos`. It can simulate going offline, sells with grouped pushes, and encrypts payloads.
+  - **Ent-managed tables:** the sync tables are part of the example's Ent schema.
+  - **Test:** `example/pos_test.go` runs the flow over HTTP.
+- **Docs: [Offline-First Sync](docs/offline-sync.md)**. Covers resources, the protocol, conflicts, encryption and key rotation, devices, compaction (and why `Retain` matters), the clients, and the example.
+
+---
+
 ## [v1.20.1] - 2026-11-27
 
 ### Added

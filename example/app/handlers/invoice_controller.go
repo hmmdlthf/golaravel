@@ -227,7 +227,11 @@ func (ctrl *InvoiceController) ApiLogin(c *context.Context) error {
 	}
 
 	token, err := ctrl.jwt.GenerateToken(fmt.Sprint(u.ID), map[string]any{
-		"name":  u.Name,
+		// The example has one tenant; the offline POS reads it from here
+		// (privacy.JWTClaimResolver), since a server-issued claim can't be
+		// forged by the client.
+		"tenant_id": "demo",
+		"name":      u.Name,
 		"email": u.Email,
 		"role":  u.Role,
 	})

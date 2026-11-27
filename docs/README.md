@@ -192,3 +192,10 @@ Welcome to the official documentation for **GoLaravel** — the ultra-high-perfo
    - `Require` Middleware & Inertia Shared Props
    - Caching, Request Memo & `Changed` Events
    - `features:*` Artisan Commands & `features.Fake` for Tests
+
+30. **[Offline-First Sync](./offline-sync.md)**
+   - Append-only outbox, idempotent push, paged pull and snapshots (`pkg/offline`)
+   - Scaffolding synced entities (`artisan make:syncable`)
+   - Conflict resolution with hybrid logical clocks, field-level LWW and counters
+   - Per-device payload encryption, key rotation and device sign-out
+   - Ledger compaction, TypeScript & Flutter clients, and the example offline POS

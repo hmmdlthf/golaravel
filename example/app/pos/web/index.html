@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GoLaravel offline till</title>
+<style>
+  :root { --bg: #f6f7f9; --card: #fff; --ink: #1c2330; --muted: #667085; --line: #e4e7ec; --ok: #12805c; --warn: #b54708; --bad: #b42318; --accent: #3a5bd9; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #11151c; --card: #1a2029; --ink: #e8ecf2; --muted: #98a2b3; --line: #2b3340; --accent: #7c94ff; } }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; font: 15px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--card); }
+  h1 { font-size: 17px; margin: 0; }
+  main { max-width: 960px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  h2 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .badge { display: inline-flex; gap: 6px; align-items: center; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); font-size: 13px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .idle .dot { background: var(--ok); } .offline .dot, .backoff .dot { background: var(--warn); } .error .dot, .revoked .dot { background: var(--bad); }
+  .row { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .muted { color: var(--muted); font-size: 13px; }
+  button, input { font: inherit; border-radius: 8px; border: 1px solid var(--line); padding: 7px 12px; background: var(--card); color: var(--ink); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .5; }
+  form { display: flex; flex-wrap: wrap; gap: 8px; }
+  form input { flex: 1 1 140px; min-width: 0; }
+  label.toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+  .stock-low { color: var(--warn); }
+  #login { max-width: 360px; margin: 40px auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Offline till</h1>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <label class="toggle"><input type="checkbox" id="offline"> Simulate offline</label>
+    <span id="status" class="badge"><span class="dot"></span><span id="status-text">signed out</span></span>
+    <button id="sync" disabled>Sync now</button>
+    <button id="signout" hidden>Sign out</button>
+  </div>
+</header>
+
+<section id="login">
+  <h2>Sign in</h2>
+  <form id="login-form">
+    <input name="email" type="email" value="admin@golaravel.dev" required>
+    <input name="password" type="password" value="password123" required>
+    <label class="toggle"><input type="checkbox" name="encrypt" checked> Encrypt payloads</label>
+    <button class="primary">Sign in</button>
+  </form>
+  <p class="muted" id="login-error"></p>
+</section>
+
+<main id="till" hidden>
+  <section>
+    <h2>Products</h2>
+    <div id="products"></div>
+    <form id="add-product" style="margin-top:12px">
+      <input name="name" placeholder="New product" required>
+      <input name="price" type="number" min="0" placeholder="Price (cents)" required>
+      <input name="stock" type="number" min="0" placeholder="Stock" required>
+      <button>Add</button>
+    </form>
+  </section>
+  <section>
+    <h2>Recent sales</h2>
+    <div id="sales" class="muted">No sales yet.</div>
+    <h2 style="margin-top:16px">Refused by the server</h2>
+    <div id="dead" class="muted">Nothing.</div>
+  </section>
+</main>
+
+<script type="module">
+  import { SyncClient } from "/pos/lib/index.js";
+
+  const $ = (id) => document.getElementById(id);
+  let sync, offline = false;
+  const money = (cents) => (cents / 100).toFixed(2);
+
+  // A fetch that fails while "Simulate offline" is on, like a dead network.
+  const fetchMaybe = (input, init) => (offline ? Promise.reject(new TypeError("offline (simulated)")) : fetch(input, init));
+  $("offline").onchange = (e) => {
+    offline = e.target.checked;
+    if (!offline) window.dispatchEvent(new Event("online"));
+  };
+
+  async function start(token, encrypt) {
+    sync = await SyncClient.open({
+      url: "/api/pos/sync",
+      entities: ["product", "sale", "sale_line"],
+      database: "golaravel-pos-demo",
+      headers: () => ({ Authorization: `Bearer ${token}` }),
+      fetch: fetchMaybe,
+      encrypt,
+      device: { name: navigator.userAgent.slice(0, 60), platform: "web" },
+      pollInterval: 10_000,
+    });
+    $("login").hidden = true;
+    $("till").hidden = false;
+    $("sync").disabled = false;
+    $("signout").hidden = false;
+
+    sync.on("status", renderStatus);
+    renderStatus(sync.status);
+    sync.table("product").subscribe(renderProducts);
+    sync.table("sale").subscribe(renderSales);
+    sync.on("rejected", renderDead);
+    renderDead();
+  }
+
+  function renderStatus(s) {
+    $("status").className = "badge " + s.state;
+    $("status-text").textContent = `${s.state}${s.pending ? ` · ${s.pending} pending` : ""}${s.error && s.state !== "idle" ? ` · ${s.error}` : ""}`;
+  }
+
+  function renderProducts(rows) {
+    rows.sort((a, b) => a.name.localeCompare(b.name));
+    $("products").replaceChildren(...rows.map((p) => {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML = `<div><strong></strong><div class="muted"></div></div><button class="primary">Sell 1</button>`;
+      row.querySelector("strong").textContent = p.name;
+      const info = row.querySelector(".muted");
+      info.textContent = `${money(p.price)} · ${p.stock} in stock`;
+      if (p.stock <= 3) info.classList.add("stock-low");
+      row.querySelector("button").onclick = () => sell(p);
+      return row;
+    }));
+  }
+
+  async function renderSales(rows) {
+    rows.sort((a, b) => String(b.sold_at).localeCompare(String(a.sold_at)));
+    if (!rows.length) return;
+    $("sales").replaceChildren(...rows.slice(0, 8).map((s) => {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.textContent = `${money(s.total)} — ${new Date(s.sold_at).toLocaleTimeString()} ${s.note ? "· " + s.note : ""}`;
+      return row;
+    }));
+  }
+
+  async function renderDead() {
+    const dead = await sync.deadLetters();
+    if (!dead.length) return ($("dead").textContent = "Nothing.");
+    $("dead").replaceChildren(...dead.map((d) => {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML = `<span></span><button>Dismiss</button>`;
+      row.querySelector("span").textContent = `${d.mutation.entity} ${d.mutation.op}: ${d.reason}`;
+      row.querySelector("button").onclick = async () => { await sync.discardDeadLetter(d.id); renderDead(); };
+      return row;
+    }));
+  }
+
+  // A sale, its line and the stock change reach the server together.
+  async function sell(p) {
+    await sync.batch((b) => {
+      const sale = b.create("sale", { total: p.price, sold_at: new Date().toISOString(), note: offline ? "sold offline" : "" });
+      b.create("sale_line", { sale_id: sale, product_id: p.id, qty: 1, price: p.price });
+      b.increment("product", p.id, "stock", -1);
+    });
+  }
+
+  $("add-product").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    await sync.table("product").create({ name: f.get("name"), sku: "", price: Number(f.get("price")), stock: Number(f.get("stock")) });
+    e.target.reset();
+  };
+  $("sync").onclick = () => sync.syncNow().catch(() => {});
+  $("signout").onclick = async () => {
+    await sync?.close();
+    sessionStorage.removeItem("pos-token");
+    location.reload();
+  };
+
+  $("login-form").onsubmit = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    $("login-error").textContent = "";
+    const r = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: f.get("email"), password: f.get("password") }),
+    });
+    const body = await r.json();
+    if (!r.ok) return ($("login-error").textContent = body.error ?? "Sign-in failed");
+    sessionStorage.setItem("pos-token", JSON.stringify({ token: body.token, encrypt: !!f.get("encrypt") }));
+    start(body.token, !!f.get("encrypt"));
+  };
+
+  const saved = sessionStorage.getItem("pos-token");
+  if (saved) {
+    const { token, encrypt } = JSON.parse(saved);
+    start(token, encrypt);
+  }
+</script>
+</body>
+</html>

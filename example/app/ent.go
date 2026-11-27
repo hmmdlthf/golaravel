@@ -14,6 +14,12 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/golaravel/golaravel/example/app/invoice"
 	"github.com/golaravel/golaravel/example/app/lineitem"
+	"github.com/golaravel/golaravel/example/app/product"
+	"github.com/golaravel/golaravel/example/app/sale"
+	"github.com/golaravel/golaravel/example/app/saleline"
+	"github.com/golaravel/golaravel/example/app/syncdevice"
+	"github.com/golaravel/golaravel/example/app/syncledger"
+	"github.com/golaravel/golaravel/example/app/synctenant"
 	"github.com/golaravel/golaravel/example/app/user"
 )
 
@@ -75,9 +81,15 @@ var (
 func checkColumn(table, column string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			invoice.Table:  invoice.ValidColumn,
-			lineitem.Table: lineitem.ValidColumn,
-			user.Table:     user.ValidColumn,
+			invoice.Table:    invoice.ValidColumn,
+			lineitem.Table:   lineitem.ValidColumn,
+			product.Table:    product.ValidColumn,
+			sale.Table:       sale.ValidColumn,
+			saleline.Table:   saleline.ValidColumn,
+			syncdevice.Table: syncdevice.ValidColumn,
+			syncledger.Table: syncledger.ValidColumn,
+			synctenant.Table: synctenant.ValidColumn,
+			user.Table:       user.ValidColumn,
 		})
 	})
 	return columnCheck(table, column)
