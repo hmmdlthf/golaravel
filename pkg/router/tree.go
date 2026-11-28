@@ -218,6 +218,10 @@ func (n *node) insertChild(path, fullPath string, handlers []context.HandlerFunc
 					priority: 1,
 				}
 				n.children = []*node{child}
+				// index the child, so later routes under the same
+				// parameter walk into it instead of adding a duplicate
+				// sibling that shadows it
+				n.indices = string([]byte{path[0]})
 				n = child
 				continue
 			}

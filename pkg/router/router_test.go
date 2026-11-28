@@ -269,3 +269,46 @@ func TestRouterStaticRouteRegisteredAfterParamSibling(t *testing.T) {
 		}
 	}
 }
+
+// A static route registered before a parameter sibling under the same
+// parent parameter must still match (it used to be shadowed by the
+// parameter route because the parent parameter's child was not indexed).
+func TestStaticRouteBeforeParamSiblingUnderParam(t *testing.T) {
+	orders := [][]string{
+		{"/a/:id/rel/notes/uploads", "/a/:id/rel/notes", "/a/:id/rel/notes/:child", "/a/:id/rel/notes/:child/delete"},
+		{"/a/:id/rel/notes", "/a/:id/rel/notes/:child", "/a/:id/rel/notes/:child/delete", "/a/:id/rel/notes/uploads"},
+		{"/a/:id/rel/notes/:child/delete", "/a/:id/rel/notes/uploads", "/a/:id/rel/notes/:child", "/a/:id/rel/notes"},
+	}
+	want := map[string]string{
+		"/a/1/rel/notes/uploads":  "/a/:id/rel/notes/uploads",
+		"/a/1/rel/notes":          "/a/:id/rel/notes",
+		"/a/1/rel/notes/7":        "/a/:id/rel/notes/:child",
+		"/a/1/rel/notes/7/delete": "/a/:id/rel/notes/:child/delete",
+	}
+	for _, order := range orders {
+		r := New()
+		r.POST("/a/uploads", func(c *context.Context) error { c.Set("route", "/a/uploads"); return nil })
+		for _, p := range order {
+			p := p
+			r.POST(p, func(c *context.Context) error { c.Set("route", p); return nil })
+		}
+		for path, route := range want {
+			c := context.NewContext()
+			hs := r.Match("POST", path, c)
+			if hs == nil {
+				t.Fatalf("order %v: %s did not match", order, path)
+			}
+			c.SetHandlers(hs)
+			_ = c.Next()
+			if got, _ := c.Get("route"); got != route {
+				t.Fatalf("order %v: %s matched %v, want %s", order, path, got, route)
+			}
+		}
+		if c := context.NewContext(); true {
+			r.Match("POST", "/a/1/rel/notes/7", c)
+			if c.Param("child") != "7" || c.Param("id") != "1" {
+				t.Fatalf("params: id=%q child=%q", c.Param("id"), c.Param("child"))
+			}
+		}
+	}
+}
