@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v1.22.1] - 2026-11-28
+
+### Fixed
+- **Router: a fixed route registered before a `:param` sibling under the same parameter was shadowed.** For example, `/a/:id/notes/uploads` was registered before `/a/:id/notes/:child`, and requests to `/a/1/notes/uploads` reached the `:child` route.
+  - **Cause:** a parameter node whose path continues didn't index its child. Later routes under that parameter then added a second branch instead of joining the first, and the first branch became unreachable.
+  - **Fix:** routes now match the same way whatever order they are registered in.
+
+---
+
 ## [v1.22.0] - 2026-11-27
 
 ### Added
